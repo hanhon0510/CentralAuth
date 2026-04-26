@@ -1,0 +1,64 @@
+# =========================
+# Root docs
+# =========================
+HELP.md
+
+# =========================
+# Backend - Spring Boot / Maven
+# =========================
+CentralAuth-be/target/
+CentralAuth-be/.mvn/wrapper/maven-wrapper.jar
+
+# STS
+CentralAuth-be/.apt_generated
+CentralAuth-be/.classpath
+CentralAuth-be/.factorypath
+CentralAuth-be/.project
+CentralAuth-be/.settings/
+CentralAuth-be/.springBeans
+CentralAuth-be/.sts4-cache
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# NetBeans
+CentralAuth-be/nbproject/private/
+CentralAuth-be/nbbuild/
+CentralAuth-be/dist/
+CentralAuth-be/nbdist/
+CentralAuth-be/.nb-gradle/
+CentralAuth-be/build/
+
+# =========================
+# Frontend - Vite / Node
+# =========================
+CentralAuth-fe/node_modules/
+CentralAuth-fe/dist/
+CentralAuth-fe/dist-ssr/
+*.local
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# =========================
+# Editor / OS files
+# =========================
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
