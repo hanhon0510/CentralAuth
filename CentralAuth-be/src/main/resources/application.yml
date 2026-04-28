@@ -1,0 +1,64 @@
+spring:
+  application:
+    name: central-auth
+
+  datasource:
+    url: ${CENTRALAUTH_DATASOURCE_URL:jdbc:postgresql://localhost:5432/centralauth}
+    username: ${CENTRALAUTH_DATASOURCE_USERNAME:centralauth}
+    password: ${CENTRALAUTH_DATASOURCE_PASSWORD:centralauth}
+    driver-class-name: org.postgresql.Driver
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  data:
+    redis:
+      host: ${CENTRALAUTH_REDIS_HOST:localhost}
+      port: ${CENTRALAUTH_REDIS_PORT:6379}
+      password: ${CENTRALAUTH_REDIS_PASSWORD:}
+      timeout: 2s
+
+  kafka:
+    bootstrap-servers: ${CENTRALAUTH_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: central-auth-audit
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.centralauth.event
+
+mybatis:
+  mapper-locations: classpath*:mappers/**/*.xml
+  type-aliases-package: com.centralauth
+  configuration:
+    map-underscore-to-camel-case: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+server:
+  port: ${PORT:8080}
+
+centralauth:
+  kafka:
+    topics:
+      user-registered: auth.user.registered
+      user-verified: auth.user.verified
+      login-succeeded: auth.user.login.succeeded
+      login-failed: auth.user.login.failed
+      logout: auth.user.logout
+      password-reset-requested: auth.user.password.reset.requested
+      password-changed: auth.user.password.changed
