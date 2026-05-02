@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+		PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.centralauth.user.UserMapper">
+
+	<select id="findByEmail" resultType="com.centralauth.user.User">
+		select cast(id as varchar) as id,
+		       email,
+		       password_hash,
+		       display_name,
+		       enabled,
+		       email_verified,
+		       created_at,
+		       updated_at
+		from users
+		where lower(email) = lower(#{email})
+	</select>
+
+	<select id="findById" resultType="com.centralauth.user.User">
+		select cast(id as varchar) as id,
+		       email,
+		       password_hash,
+		       display_name,
+		       enabled,
+		       email_verified,
+		       created_at,
+		       updated_at
+		from users
+		where id = cast(#{id} as uuid)
+	</select>
+
+	<insert id="insert" parameterType="com.centralauth.user.User">
+		insert into users (id, email, password_hash, display_name)
+		values (cast(#{id} as uuid), #{email}, #{passwordHash}, #{displayName})
+	</insert>
+</mapper>

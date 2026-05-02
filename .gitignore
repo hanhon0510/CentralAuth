@@ -4,6 +4,14 @@
 HELP.md
 
 # =========================
+# Local environment / runtime
+# =========================
+.env
+.env.*
+!.env.example
+.run/
+
+# =========================
 # Backend - Spring Boot / Maven
 # =========================
 CentralAuth-be/target/
@@ -62,3 +70,5 @@ lerna-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+/docs/*

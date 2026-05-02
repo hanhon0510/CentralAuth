@@ -1,11 +1,14 @@
 spring:
+  config:
+    import: optional:file:../.env[.properties]
+
   application:
     name: central-auth
 
   datasource:
-    url: ${CENTRALAUTH_DATASOURCE_URL:jdbc:postgresql://localhost:5432/centralauth}
-    username: ${CENTRALAUTH_DATASOURCE_USERNAME:centralauth}
-    password: ${CENTRALAUTH_DATASOURCE_PASSWORD:centralauth}
+    url: ${DATASOURCE_URL:jdbc:postgresql://localhost:5432/centralAuth}
+    username: ${DATASOURCE_USERNAME:centralauth}
+    password: ${DATASOURCE_PASSWORD:centralauth}
     driver-class-name: org.postgresql.Driver
 
   flyway:
@@ -53,6 +56,10 @@ server:
   port: ${PORT:8080}
 
 centralauth:
+  jwt:
+    secret: ${CENTRALAUTH_JWT_SECRET:dev-secret-change-me-at-least-32-chars}
+    issuer: ${CENTRALAUTH_JWT_ISSUER:central-auth}
+    expires-in-seconds: ${CENTRALAUTH_JWT_EXPIRES_IN_SECONDS:3600}
   kafka:
     topics:
       user-registered: auth.user.registered
