@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.centralauth.auth.DuplicateEmailException;
+import com.centralauth.auth.InvalidEmailVerificationOtpException;
 import com.centralauth.auth.InvalidCredentialsException;
 
 @RestControllerAdvice
@@ -25,6 +26,11 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(InvalidCredentialsException.class)
 	public ResponseEntity<ApiResponse<Void>> handleInvalidCredentials(InvalidCredentialsException ex) {
 		return error(ex.getMessage(), HttpStatus.UNAUTHORIZED);
+	}
+
+	@ExceptionHandler(InvalidEmailVerificationOtpException.class)
+	public ResponseEntity<ApiResponse<Void>> handleInvalidEmailVerificationOtp(InvalidEmailVerificationOtpException ex) {
+		return error(ex.getMessage(), HttpStatus.BAD_REQUEST);
 	}
 
 	private ResponseEntity<ApiResponse<Void>> error(String message, HttpStatus status) {

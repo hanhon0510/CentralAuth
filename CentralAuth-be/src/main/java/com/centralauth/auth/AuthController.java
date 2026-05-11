@@ -13,6 +13,7 @@ import com.centralauth.auth.dto.AuthResponse;
 import com.centralauth.auth.dto.SigninRequest;
 import com.centralauth.auth.dto.SignupRequest;
 import com.centralauth.auth.dto.UserResponse;
+import com.centralauth.auth.dto.VerifyEmailRequest;
 import com.centralauth.common.ApiResponse;
 
 @RestController
@@ -33,6 +34,12 @@ public class AuthController {
 	@PostMapping("/signin")
 	public ApiResponse<AuthResponse> signin(@Valid @RequestBody SigninRequest request) {
 		return ApiResponse.success("Signin successful", authService.signin(request));
+	}
+
+	@PostMapping("/verify-email")
+	public ApiResponse<Void> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+		authService.verifyEmail(request);
+		return ApiResponse.success("Email verified", null);
 	}
 
 	@GetMapping("/me")

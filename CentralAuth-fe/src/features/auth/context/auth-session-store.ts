@@ -8,7 +8,8 @@ export type AuthSessionContextValue = {
   tokenPreview: string
   user: User | null
   signinWithPassword: (email: string, password: string) => Promise<void>
-  signupWithPassword: (email: string, password: string, displayName: string) => Promise<void>
+  signupWithPassword: (email: string, password: string, displayName: string) => Promise<User>
+  verifyEmailWithOtp: (email: string, otp: string) => Promise<void>
   clearSession: () => void
 }
 

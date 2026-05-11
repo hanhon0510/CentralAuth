@@ -13,4 +13,8 @@ public interface UserMapper {
 	Optional<User> findById(@Param("id") String id);
 
 	void insert(User user);
+
+	void insertRole(@Param("userId") String userId, @Param("role") String role);
+
+	int verifyEmail(@Param("email") String email);
 }

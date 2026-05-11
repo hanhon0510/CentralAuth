@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PropsWithChildren } from 'react'
-import { restoreSession, signin, signup } from '../api/authApi'
+import { restoreSession, signin, signup, verifyEmail } from '../api/authApi'
 import { tokenStorageKey } from '../../../shared/constants/storage'
 import type { User } from '../types/auth'
 import { AuthSessionStore } from './auth-session-store'
@@ -61,9 +61,16 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     setLoading(true)
     try {
       const response = await signup({ email, password, displayName })
-      localStorage.setItem(tokenStorageKey, response.token)
-      setToken(response.token)
-      setUser(response.user)
+      return response.user
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function verifyEmailWithOtp(email: string, otp: string) {
+    setLoading(true)
+    try {
+      await verifyEmail({ email, otp })
     } finally {
       setLoading(false)
     }
@@ -85,6 +92,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       user,
       signinWithPassword,
       signupWithPassword,
+      verifyEmailWithOtp,
       clearSession,
     }),
     [loading, restoring, token, tokenPreview, user],

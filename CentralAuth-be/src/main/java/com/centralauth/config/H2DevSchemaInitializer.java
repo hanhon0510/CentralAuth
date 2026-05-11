@@ -29,7 +29,7 @@ public class H2DevSchemaInitializer {
 				    email varchar(320) not null,
 				    password_hash varchar(255) not null,
 				    display_name varchar(120),
-				    enabled boolean not null default true,
+				    enabled boolean not null default false,
 				    email_verified boolean not null default false,
 				    created_at timestamp with time zone not null default current_timestamp,
 				    updated_at timestamp with time zone not null default current_timestamp,

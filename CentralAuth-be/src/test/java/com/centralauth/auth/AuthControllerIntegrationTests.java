@@ -1,21 +1,33 @@
 package com.centralauth.auth;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.blankOrNullString;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.matches;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Duration;
+
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -43,6 +55,11 @@ class AuthControllerIntegrationTests {
 	@Autowired
 	JdbcTemplate jdbcTemplate;
 
+	@MockitoBean
+	StringRedisTemplate redisTemplate;
+
+	ValueOperations<String, String> valueOperations;
+
 	@BeforeEach
 	void createSchema() {
 		jdbcTemplate.execute("""
@@ -51,17 +68,61 @@ class AuthControllerIntegrationTests {
 				    email varchar(320) not null,
 				    password_hash varchar(255) not null,
 				    display_name varchar(120),
-				    enabled boolean not null default true,
+				    enabled boolean not null default false,
 				    email_verified boolean not null default false,
 				    created_at timestamp with time zone not null default current_timestamp,
 				    updated_at timestamp with time zone not null default current_timestamp,
 				    constraint users_email_key unique (email)
 				)
 				""");
+		jdbcTemplate.execute("""
+				create table if not exists user_roles (
+				    user_id uuid not null,
+				    role varchar(64) not null,
+				    created_at timestamp with time zone not null default current_timestamp,
+				    constraint user_roles_pk primary key (user_id, role),
+				    constraint user_roles_user_id_fk foreign key (user_id) references users (id) on delete cascade
+				)
+				""");
+	}
+
+	@SuppressWarnings("unchecked")
+	@BeforeEach
+	void configureRedis() {
+		valueOperations = mock(ValueOperations.class);
+		when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 	}
 
 	private MockMvc mockMvc() {
 		return MockMvcBuilders.webAppContextSetup(webApplicationContext).apply(springSecurity()).build();
+	}
+
+	private String captureSignupOtp(String email) {
+		ArgumentCaptor<String> otpCaptor = ArgumentCaptor.forClass(String.class);
+		verify(valueOperations).set(
+				eq("email-verification:" + email),
+				otpCaptor.capture(),
+				eq(Duration.ofMinutes(10)));
+		return otpCaptor.getValue();
+	}
+
+	private void verifyEmail(String email, String otp) throws Exception {
+		when(valueOperations.get("email-verification:" + email)).thenReturn(otp);
+
+		mockMvc().perform(post("/api/v1/auth/verify-email")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"%s","otp":"%s"}
+								""".formatted(email, otp)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Email verified"));
+	}
+
+	private String tokenFrom(MvcResult result) throws Exception {
+		String response = result.getResponse().getContentAsString();
+		String token = response.substring(response.indexOf("\"token\":\"") + 9);
+		return token.substring(0, token.indexOf('"'));
 	}
 
 	@Test
@@ -76,7 +137,84 @@ class AuthControllerIntegrationTests {
 				.andExpect(jsonPath("$.message").value("Signup successful"))
 				.andExpect(jsonPath("$.data.token", not(blankOrNullString())))
 				.andExpect(jsonPath("$.data.user.email").value("new.user@example.com"))
-				.andExpect(jsonPath("$.data.user.displayName").value("New User"));
+				.andExpect(jsonPath("$.data.user.displayName").value("New User"))
+				.andExpect(jsonPath("$.data.user.emailVerified").value(false));
+
+		Integer roleCount = jdbcTemplate.queryForObject("""
+				select count(*)
+				from user_roles ur
+				join users u on u.id = ur.user_id
+				where u.email = ? and ur.role = ?
+				""", Integer.class, "new.user@example.com", "ROLE_USER");
+		assertThat(roleCount).isEqualTo(1);
+
+		verify(valueOperations).set(
+				eq("email-verification:new.user@example.com"),
+				matches("\\d{6}"),
+				eq(Duration.ofMinutes(10)));
+
+		mockMvc().perform(post("/api/v1/auth/signin")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"new.user@example.com","password":"Password123!"}
+								"""))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Invalid email or password"));
+	}
+
+	@Test
+	void verifyEmailActivatesUserAndAllowsSignin() throws Exception {
+		mockMvc().perform(post("/api/v1/auth/signup")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"verify@example.com","password":"Password123!","displayName":"Verify User"}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.user.emailVerified").value(false));
+
+		String otp = captureSignupOtp("verify@example.com");
+		verifyEmail("verify@example.com", otp);
+
+		verify(redisTemplate).delete("email-verification:verify@example.com");
+
+		Boolean verified = jdbcTemplate.queryForObject(
+				"select enabled and email_verified from users where email = ?",
+				Boolean.class,
+				"verify@example.com");
+		assertThat(verified).isTrue();
+
+		mockMvc().perform(post("/api/v1/auth/signin")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"verify@example.com","password":"Password123!"}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Signin successful"))
+				.andExpect(jsonPath("$.data.user.email").value("verify@example.com"))
+				.andExpect(jsonPath("$.data.user.emailVerified").value(true));
+	}
+
+	@Test
+	void verifyEmailRejectsInvalidOtp() throws Exception {
+		mockMvc().perform(post("/api/v1/auth/signup")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"invalid-otp@example.com","password":"Password123!"}
+								"""))
+				.andExpect(status().isOk());
+
+		when(valueOperations.get("email-verification:invalid-otp@example.com")).thenReturn("123456");
+
+		mockMvc().perform(post("/api/v1/auth/verify-email")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"invalid-otp@example.com","otp":"654321"}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Invalid or expired email verification OTP"));
 	}
 
 	@Test
@@ -102,6 +240,7 @@ class AuthControllerIntegrationTests {
 								{"email":"signin@example.com","password":"Password123!","displayName":"Signin User"}
 								"""))
 				.andExpect(status().isOk());
+		verifyEmail("signin@example.com", captureSignupOtp("signin@example.com"));
 
 		mockMvc().perform(post("/api/v1/auth/signin")
 						.contentType(MediaType.APPLICATION_JSON)
@@ -143,10 +282,9 @@ class AuthControllerIntegrationTests {
 								"""))
 				.andExpect(status().isOk())
 				.andReturn();
+		verifyEmail("me@example.com", captureSignupOtp("me@example.com"));
 
-		String response = signup.getResponse().getContentAsString();
-		String token = response.substring(response.indexOf("\"token\":\"") + 9);
-		token = token.substring(0, token.indexOf('"'));
+		String token = tokenFrom(signup);
 
 		mockMvc().perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())

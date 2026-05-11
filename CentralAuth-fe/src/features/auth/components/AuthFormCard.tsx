@@ -7,7 +7,6 @@ import {
   Input,
   Segmented,
   Space,
-  Typography,
 } from 'antd';
 import type { AuthMode } from '../types/auth';
 

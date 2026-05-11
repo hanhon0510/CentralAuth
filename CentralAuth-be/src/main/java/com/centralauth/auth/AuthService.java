@@ -12,6 +12,7 @@ import com.centralauth.auth.dto.AuthResponse;
 import com.centralauth.auth.dto.SigninRequest;
 import com.centralauth.auth.dto.SignupRequest;
 import com.centralauth.auth.dto.UserResponse;
+import com.centralauth.auth.dto.VerifyEmailRequest;
 import com.centralauth.security.JwtService;
 import com.centralauth.user.User;
 import com.centralauth.user.UserMapper;
@@ -19,14 +20,22 @@ import com.centralauth.user.UserMapper;
 @Service
 public class AuthService {
 
+	private static final String DEFAULT_ROLE = "ROLE_USER";
+
 	private final UserMapper userMapper;
 	private final PasswordEncoder passwordEncoder;
 	private final JwtService jwtService;
+	private final EmailVerificationService emailVerificationService;
 
-	public AuthService(UserMapper userMapper, PasswordEncoder passwordEncoder, JwtService jwtService) {
+	public AuthService(
+			UserMapper userMapper,
+			PasswordEncoder passwordEncoder,
+			JwtService jwtService,
+			EmailVerificationService emailVerificationService) {
 		this.userMapper = userMapper;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtService = jwtService;
+		this.emailVerificationService = emailVerificationService;
 	}
 
 	@Transactional
@@ -37,7 +46,7 @@ public class AuthService {
 				email,
 				passwordEncoder.encode(request.password()),
 				normalizeDisplayName(request.displayName()),
-				true,
+				false,
 				false,
 				null,
 				null);
@@ -47,9 +56,20 @@ public class AuthService {
 		catch (DuplicateKeyException ex) {
 			throw new DuplicateEmailException();
 		}
+		userMapper.insertRole(user.id(), DEFAULT_ROLE);
+		emailVerificationService.issueOtp(email);
 
 		User savedUser = userMapper.findByEmail(email).orElse(user);
 		return toAuthResponse(savedUser);
+	}
+
+	public void verifyEmail(VerifyEmailRequest request) {
+		String email = normalizeEmail(request.email());
+		emailVerificationService.requireValidOtp(email, request.otp());
+		if (userMapper.verifyEmail(email) == 0) {
+			throw new InvalidEmailVerificationOtpException();
+		}
+		emailVerificationService.consumeOtp(email);
 	}
 
 	public AuthResponse signin(SigninRequest request) {
