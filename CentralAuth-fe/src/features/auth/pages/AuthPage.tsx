@@ -35,7 +35,7 @@ export function AuthPage({ mode }: AuthPageProps) {
   } = useAuthSession()
   const [error, setError] = useState('')
   const [verificationEmail, setVerificationEmail] = useState('')
-  const [resendMessage, setResendMessage] = useState('')
+  const [resendSucceeded, setResendSucceeded] = useState(false)
   const [resendCooldownSeconds, setResendCooldownSeconds] = useState(0)
   const [resending, setResending] = useState(false)
 
@@ -68,7 +68,7 @@ export function AuthPage({ mode }: AuthPageProps) {
           values.displayName?.trim() ?? '',
         )
         setVerificationEmail(createdUser.email)
-        setResendMessage('')
+        setResendSucceeded(false)
         setResendCooldownSeconds(0)
         return
       }
@@ -81,7 +81,7 @@ export function AuthPage({ mode }: AuthPageProps) {
   function handleModeChange(nextMode: AuthMode) {
     setError('')
     setVerificationEmail('')
-    setResendMessage('')
+    setResendSucceeded(false)
     setResendCooldownSeconds(0)
     navigate(nextMode === 'signup' ? ROUTES.signup : ROUTES.signin)
   }
@@ -91,7 +91,7 @@ export function AuthPage({ mode }: AuthPageProps) {
     try {
       await verifyEmailWithOtp(verificationEmail, otp)
       setVerificationEmail('')
-      setResendMessage('')
+      setResendSucceeded(false)
       setResendCooldownSeconds(0)
       navigate(ROUTES.signin, {
         replace: true,
@@ -104,12 +104,12 @@ export function AuthPage({ mode }: AuthPageProps) {
 
   async function handleResendVerificationOtp() {
     setError('')
-    setResendMessage('')
+    setResendSucceeded(false)
     setResending(true)
     try {
       const cooldownSeconds = await resendVerificationOtp(verificationEmail)
       setResendCooldownSeconds(cooldownSeconds)
-      setResendMessage(t('auth.resendSent'))
+      setResendSucceeded(true)
     } catch (requestError) {
       if (requestError instanceof ApiRequestError && requestError.retryAfterSeconds) {
         setResendCooldownSeconds(requestError.retryAfterSeconds)
@@ -123,7 +123,7 @@ export function AuthPage({ mode }: AuthPageProps) {
   function handleBackToSignin() {
     setError('')
     setVerificationEmail('')
-    setResendMessage('')
+    setResendSucceeded(false)
     setResendCooldownSeconds(0)
     navigate(ROUTES.signin)
   }
@@ -151,7 +151,7 @@ export function AuthPage({ mode }: AuthPageProps) {
                   verifying={loading && !resending}
                   resending={resending}
                   error={error}
-                  resendMessage={resendMessage}
+                  resendSucceeded={resendSucceeded}
                   resendCooldownSeconds={resendCooldownSeconds}
                   onBack={handleBackToSignin}
                   onResend={handleResendVerificationOtp}

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { MailOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Form, Input, Space, Typography } from 'antd'
 import { useI18n } from '../../../shared/i18n/useI18n'
@@ -11,7 +12,7 @@ type VerifyEmailCardProps = {
   verifying: boolean
   resending: boolean
   error: string
-  resendMessage: string
+  resendSucceeded: boolean
   resendCooldownSeconds: number
   onBack: () => void
   onResend: () => Promise<void>
@@ -23,13 +24,25 @@ export function VerifyEmailCard({
   verifying,
   resending,
   error,
-  resendMessage,
+  resendSucceeded,
   resendCooldownSeconds,
   onBack,
   onResend,
   onSubmit,
 }: VerifyEmailCardProps) {
-  const { t } = useI18n()
+  const [form] = Form.useForm<VerifyEmailValues>()
+  const { language, t } = useI18n()
+
+  useEffect(() => {
+    const fieldsWithErrors = form
+      .getFieldsError()
+      .filter(({ errors }) => errors.length > 0)
+      .map(({ name }) => name)
+
+    if (fieldsWithErrors.length > 0) {
+      void form.validateFields(fieldsWithErrors)
+    }
+  }, [form, language])
 
   async function handleFinish(values: VerifyEmailValues) {
     await onSubmit(values.otp)
@@ -48,9 +61,12 @@ export function VerifyEmailCard({
         <Typography.Text type="secondary">{email}</Typography.Text>
 
         {error ? <Alert type="error" showIcon message={error} /> : null}
-        {resendMessage ? <Alert type="success" showIcon message={resendMessage} /> : null}
+        {resendSucceeded ? (
+          <Alert type="success" showIcon message={t('auth.resendSent')} />
+        ) : null}
 
         <Form<VerifyEmailValues>
+          form={form}
           layout="vertical"
           onFinish={handleFinish}
           requiredMark={false}

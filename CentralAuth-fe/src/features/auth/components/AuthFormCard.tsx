@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { LockOutlined, MailOutlined, UserOutlined } from '@ant-design/icons';
 import {
   Alert,
@@ -34,7 +35,19 @@ export function AuthFormCard({
   onModeChange,
   onSubmit,
 }: AuthFormCardProps) {
-  const { t } = useI18n();
+  const [form] = Form.useForm<AuthFormValues>();
+  const { language, t } = useI18n();
+
+  useEffect(() => {
+    const fieldsWithErrors = form
+      .getFieldsError()
+      .filter(({ errors }) => errors.length > 0)
+      .map(({ name }) => name);
+
+    if (fieldsWithErrors.length > 0) {
+      void form.validateFields(fieldsWithErrors);
+    }
+  }, [form, language]);
 
   return (
     <Card title={t('auth.emailAccess')}>
@@ -52,6 +65,7 @@ export function AuthFormCard({
         {error ? <Alert type="error" showIcon message={error} /> : null}
 
         <Form<AuthFormValues>
+          form={form}
           layout="vertical"
           onFinish={onSubmit}
           requiredMark={false}
