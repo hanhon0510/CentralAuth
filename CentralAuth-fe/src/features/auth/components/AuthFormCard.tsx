@@ -9,6 +9,7 @@ import {
   Space,
 } from 'antd';
 import type { AuthMode } from '../types/auth';
+import { useI18n } from '../../../shared/i18n/useI18n';
 
 type AuthFormValues = {
   email: string;
@@ -33,15 +34,17 @@ export function AuthFormCard({
   onModeChange,
   onSubmit,
 }: AuthFormCardProps) {
+  const { t } = useI18n();
+
   return (
-    <Card title="Email access">
+    <Card title={t('auth.emailAccess')}>
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         <Segmented<AuthMode>
           block
           value={mode}
           options={[
-            { label: 'Sign in', value: 'signin' },
-            { label: 'Sign up', value: 'signup' },
+            { label: t('auth.signin'), value: 'signin' },
+            { label: t('auth.signup'), value: 'signup' },
           ]}
           onChange={onModeChange}
         />
@@ -55,24 +58,24 @@ export function AuthFormCard({
         >
           {mode === 'signup' ? (
             <Form.Item
-              label="Display name"
+              label={t('auth.displayName')}
               name="displayName"
-              rules={[{ max: 120 }]}
+              rules={[{ max: 120, message: t('auth.validation.displayName.max') }]}
             >
               <Input
                 prefix={<UserOutlined />}
                 autoComplete="name"
-                placeholder="Your name"
+                placeholder={t('auth.displayName.placeholder')}
               />
             </Form.Item>
           ) : null}
 
           <Form.Item
-            label="Email"
+            label={t('auth.email')}
             name="email"
             rules={[
-              { required: true, message: 'Please enter your email' },
-              { type: 'email' },
+              { required: true, message: t('auth.validation.email.required') },
+              { type: 'email', message: t('auth.validation.email.invalid') },
             ]}
           >
             <Input
@@ -83,12 +86,18 @@ export function AuthFormCard({
           </Form.Item>
 
           <Form.Item
-            label="Password"
+            label={t('auth.password')}
             name="password"
             rules={[
-              { required: true, message: 'Please enter your password' },
-              { min: mode === 'signup' ? 8 : 1 },
-              { max: 120 },
+              { required: true, message: t('auth.validation.password.required') },
+              {
+                min: mode === 'signup' ? 8 : 1,
+                message:
+                  mode === 'signup'
+                    ? t('auth.validation.password.min')
+                    : t('auth.validation.password.required'),
+              },
+              { max: 120, message: t('auth.validation.password.max') },
             ]}
           >
             <Input.Password
@@ -106,7 +115,7 @@ export function AuthFormCard({
             disabled={restoring}
             block
           >
-            {mode === 'signup' ? 'Create account' : 'Sign in'}
+            {mode === 'signup' ? t('auth.createAccount') : t('auth.signin')}
           </Button>
         </Form>
       </Space>

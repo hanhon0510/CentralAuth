@@ -1,6 +1,7 @@
 import { CheckCircleTwoTone } from '@ant-design/icons'
 import { Button, Card, Descriptions, Space, Tag, Typography } from 'antd'
 import type { User } from '../types/auth'
+import { useI18n } from '../../../shared/i18n/useI18n'
 
 type SessionCardProps = {
   tokenPreview: string
@@ -9,29 +10,31 @@ type SessionCardProps = {
 }
 
 export function SessionCard({ tokenPreview, user, onSignOut }: SessionCardProps) {
+  const { t } = useI18n()
+
   return (
-    <Card title="Current session">
+    <Card title={t('session.current')}>
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
         <Space align="center">
           <Typography.Title level={4} style={{ margin: 0 }}>
             {user.displayName || user.email}
           </Typography.Title>
           <Tag color="success" icon={<CheckCircleTwoTone twoToneColor="#52c41a" />}>
-            Signed in
+            {t('session.signedIn')}
           </Tag>
         </Space>
 
         <Typography.Text type="secondary">{user.email}</Typography.Text>
 
         <Descriptions column={1} bordered size="small">
-          <Descriptions.Item label="User ID">{user.id}</Descriptions.Item>
-          <Descriptions.Item label="Email verified">
-            {user.emailVerified ? 'Yes' : 'No'}
+          <Descriptions.Item label={t('session.userId')}>{user.id}</Descriptions.Item>
+          <Descriptions.Item label={t('session.emailVerified')}>
+            {user.emailVerified ? t('common.yes') : t('common.no')}
           </Descriptions.Item>
-          <Descriptions.Item label="Token">{tokenPreview}</Descriptions.Item>
+          <Descriptions.Item label={t('session.token')}>{tokenPreview}</Descriptions.Item>
         </Descriptions>
 
-        <Button onClick={onSignOut}>Sign out</Button>
+        <Button onClick={onSignOut}>{t('session.signOut')}</Button>
       </Space>
     </Card>
   )

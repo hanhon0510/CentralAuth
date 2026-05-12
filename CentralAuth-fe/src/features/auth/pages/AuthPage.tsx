@@ -6,6 +6,8 @@ import { AuthFormCard } from '../components/AuthFormCard'
 import { VerifyEmailCard } from '../components/VerifyEmailCard'
 import { useAuthSession } from '../context/useAuthSession'
 import { ROUTES } from '../../../shared/constants/routes'
+import { LanguageSwitcher } from '../../../shared/i18n/LanguageSwitcher'
+import { useI18n } from '../../../shared/i18n/useI18n'
 import { ApiRequestError } from '../../../shared/lib/http'
 
 export type AuthFormValues = {
@@ -21,6 +23,7 @@ type AuthPageProps = {
 export function AuthPage({ mode }: AuthPageProps) {
   const navigate = useNavigate()
   const location = useLocation()
+  const { t } = useI18n()
   const {
     user,
     loading,
@@ -71,7 +74,7 @@ export function AuthPage({ mode }: AuthPageProps) {
       }
       await signinWithPassword(values.email, values.password)
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Request failed')
+      setError(requestError instanceof Error ? requestError.message : t('common.requestFailed'))
     }
   }
 
@@ -95,7 +98,7 @@ export function AuthPage({ mode }: AuthPageProps) {
         state: { verifiedEmail: verificationEmail },
       })
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Request failed')
+      setError(requestError instanceof Error ? requestError.message : t('common.requestFailed'))
     }
   }
 
@@ -106,12 +109,12 @@ export function AuthPage({ mode }: AuthPageProps) {
     try {
       const cooldownSeconds = await resendVerificationOtp(verificationEmail)
       setResendCooldownSeconds(cooldownSeconds)
-      setResendMessage('A new OTP has been sent. Check your email to continue.')
+      setResendMessage(t('auth.resendSent'))
     } catch (requestError) {
       if (requestError instanceof ApiRequestError && requestError.retryAfterSeconds) {
         setResendCooldownSeconds(requestError.retryAfterSeconds)
       }
-      setError(requestError instanceof Error ? requestError.message : 'Request failed')
+      setError(requestError instanceof Error ? requestError.message : t('common.requestFailed'))
     } finally {
       setResending(false)
     }
@@ -131,12 +134,15 @@ export function AuthPage({ mode }: AuthPageProps) {
         <Row justify="center">
           <Col xs={24} sm={22} md={16} lg={12} xl={10} xxl={8}>
             <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-              <Typography.Text className="app-brand">CentralAuth</Typography.Text>
+              <Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
+                <Typography.Text className="app-brand">CentralAuth</Typography.Text>
+                <LanguageSwitcher />
+              </Space>
               {verifiedEmail && !verificationEmail ? (
                 <Alert
                   type="success"
                   showIcon
-                  message="Email verified. Sign in to continue."
+                  message={t('auth.emailVerifiedSignin')}
                 />
               ) : null}
               {verificationEmail ? (
