@@ -3,6 +3,8 @@ import type { Language } from './messages'
 export const languageStorageKey = 'centralauth.language'
 export const supportedLanguages = ['en', 'vi'] as const satisfies readonly Language[]
 
+let currentLanguage: Language | null = null
+
 export function normalizeLanguage(value: string | null | undefined): Language | null {
   if (!value) return null
   const normalized = value.toLowerCase()
@@ -28,10 +30,14 @@ export function getBrowserLanguage() {
 }
 
 export function getCurrentLanguage(): Language {
-  return getStoredLanguage() ?? getBrowserLanguage() ?? 'en'
+  const language = currentLanguage ?? getStoredLanguage() ?? getBrowserLanguage() ?? 'en'
+  currentLanguage = language
+  return language
 }
 
 export function storeLanguage(language: Language) {
+  currentLanguage = language
+
   try {
     globalThis.localStorage?.setItem(languageStorageKey, language)
   } catch {
