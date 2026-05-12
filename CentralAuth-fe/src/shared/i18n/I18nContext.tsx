@@ -1,14 +1,7 @@
-import { createContext, useCallback, useMemo, useState, type PropsWithChildren } from 'react'
+import { useCallback, useMemo, useState, type PropsWithChildren } from 'react'
+import { I18nContext } from './i18n-store'
 import { getCurrentLanguage, storeLanguage } from './language'
 import { translate, type Language, type MessageKey, type MessageParams } from './messages'
-
-type I18nContextValue = {
-  language: Language
-  setLanguage: (language: Language) => void
-  t: (key: MessageKey, params?: MessageParams) => string
-}
-
-export const I18nContext = createContext<I18nContextValue | null>(null)
 
 export function I18nProvider({ children }: PropsWithChildren) {
   const [language, setLanguageState] = useState(getCurrentLanguage)
