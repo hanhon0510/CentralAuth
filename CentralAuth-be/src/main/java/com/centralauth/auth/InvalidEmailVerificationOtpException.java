@@ -1,8 +1,10 @@
 package com.centralauth.auth;
 
-public class InvalidEmailVerificationOtpException extends RuntimeException {
+import com.centralauth.common.LocalizedApiException;
+
+public class InvalidEmailVerificationOtpException extends LocalizedApiException {
 
 	public InvalidEmailVerificationOtpException() {
-		super("Invalid or expired email verification OTP");
+		super("auth.error.invalidEmailVerificationOtp");
 	}
 }

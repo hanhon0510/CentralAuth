@@ -1,8 +1,10 @@
 package com.centralauth.auth;
 
-public class InvalidCredentialsException extends RuntimeException {
+import com.centralauth.common.LocalizedApiException;
+
+public class InvalidCredentialsException extends LocalizedApiException {
 
 	public InvalidCredentialsException() {
-		super("Invalid email or password");
+		super("auth.error.invalidCredentials");
 	}
 }

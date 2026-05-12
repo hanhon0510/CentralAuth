@@ -5,6 +5,11 @@ spring:
   application:
     name: central-auth
 
+  messages:
+    basename: messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+
   datasource:
     url: ${DATASOURCE_URL:jdbc:postgresql://localhost:5432/centralAuth}
     username: ${DATASOURCE_USERNAME:centralauth}

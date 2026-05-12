@@ -17,41 +17,44 @@ import com.centralauth.auth.dto.SignupRequest;
 import com.centralauth.auth.dto.UserResponse;
 import com.centralauth.auth.dto.VerifyEmailRequest;
 import com.centralauth.common.ApiResponse;
+import com.centralauth.common.Messages;
 
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
 
 	private final AuthService authService;
+	private final Messages messages;
 
-	public AuthController(AuthService authService) {
+	public AuthController(AuthService authService, Messages messages) {
 		this.authService = authService;
+		this.messages = messages;
 	}
 
 	@PostMapping("/signup")
 	public ApiResponse<AuthResponse> signup(@Valid @RequestBody SignupRequest request) {
-		return ApiResponse.success("Signup successful", authService.signup(request));
+		return ApiResponse.success(messages.get("auth.signup.success"), authService.signup(request));
 	}
 
 	@PostMapping("/signin")
 	public ApiResponse<AuthResponse> signin(@Valid @RequestBody SigninRequest request) {
-		return ApiResponse.success("Signin successful", authService.signin(request));
+		return ApiResponse.success(messages.get("auth.signin.success"), authService.signin(request));
 	}
 
 	@PostMapping("/verify-email")
 	public ApiResponse<Void> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
 		authService.verifyEmail(request);
-		return ApiResponse.success("Email verified", null);
+		return ApiResponse.success(messages.get("auth.email.verified"), null);
 	}
 
 	@PostMapping("/resend-verification-otp")
 	public ApiResponse<ResendVerificationOtpResponse> resendVerificationOtp(
 			@Valid @RequestBody ResendVerificationOtpRequest request) {
-		return ApiResponse.success("Verification OTP resent", authService.resendVerificationOtp(request));
+		return ApiResponse.success(messages.get("auth.verificationOtp.resent"), authService.resendVerificationOtp(request));
 	}
 
 	@GetMapping("/me")
 	public ApiResponse<UserResponse> me(Authentication authentication) {
-		return ApiResponse.success("Current user", authService.currentUser((String) authentication.getPrincipal()));
+		return ApiResponse.success(messages.get("auth.currentUser"), authService.currentUser((String) authentication.getPrincipal()));
 	}
 }

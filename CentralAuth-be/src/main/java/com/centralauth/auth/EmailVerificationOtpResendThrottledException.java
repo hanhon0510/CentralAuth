@@ -1,11 +1,13 @@
 package com.centralauth.auth;
 
-public class EmailVerificationOtpResendThrottledException extends RuntimeException {
+import com.centralauth.common.LocalizedApiException;
+
+public class EmailVerificationOtpResendThrottledException extends LocalizedApiException {
 
 	private final int retryAfterSeconds;
 
 	public EmailVerificationOtpResendThrottledException(int retryAfterSeconds) {
-		super("Please wait %d seconds before requesting another verification OTP".formatted(retryAfterSeconds));
+		super("auth.error.verificationOtpResendThrottled", retryAfterSeconds);
 		this.retryAfterSeconds = retryAfterSeconds;
 	}
 

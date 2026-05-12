@@ -1,8 +1,10 @@
 package com.centralauth.auth;
 
-public class EmailVerificationNotPendingException extends RuntimeException {
+import com.centralauth.common.LocalizedApiException;
+
+public class EmailVerificationNotPendingException extends LocalizedApiException {
 
 	public EmailVerificationNotPendingException() {
-		super("Email verification is not pending for this email");
+		super("auth.error.emailVerificationNotPending");
 	}
 }

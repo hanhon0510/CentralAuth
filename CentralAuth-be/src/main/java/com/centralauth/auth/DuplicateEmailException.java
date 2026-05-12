@@ -1,8 +1,10 @@
 package com.centralauth.auth;
 
-public class DuplicateEmailException extends RuntimeException {
+import com.centralauth.common.LocalizedApiException;
+
+public class DuplicateEmailException extends LocalizedApiException {
 
 	public DuplicateEmailException() {
-		super("Email is already registered");
+		super("auth.error.duplicateEmail");
 	}
 }
