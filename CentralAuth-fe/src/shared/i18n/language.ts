@@ -20,7 +20,11 @@ export function getStoredLanguage() {
 }
 
 export function getBrowserLanguage() {
-  return normalizeLanguage(globalThis.navigator?.language)
+  try {
+    return normalizeLanguage(globalThis.navigator?.language)
+  } catch {
+    return null
+  }
 }
 
 export function getCurrentLanguage(): Language {
