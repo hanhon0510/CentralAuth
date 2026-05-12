@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.centralauth.auth.dto.AuthResponse;
+import com.centralauth.auth.dto.ResendVerificationOtpRequest;
+import com.centralauth.auth.dto.ResendVerificationOtpResponse;
 import com.centralauth.auth.dto.SigninRequest;
 import com.centralauth.auth.dto.SignupRequest;
 import com.centralauth.auth.dto.UserResponse;
@@ -70,6 +72,16 @@ public class AuthService {
 			throw new InvalidEmailVerificationOtpException();
 		}
 		emailVerificationService.consumeOtp(email);
+	}
+
+	public ResendVerificationOtpResponse resendVerificationOtp(ResendVerificationOtpRequest request) {
+		String email = normalizeEmail(request.email());
+		User user = userMapper.findByEmail(email).orElseThrow(EmailVerificationNotPendingException::new);
+		if (user.emailVerified()) {
+			throw new EmailVerificationNotPendingException();
+		}
+		int resendCooldownSeconds = emailVerificationService.resendOtp(email);
+		return new ResendVerificationOtpResponse(resendCooldownSeconds);
 	}
 
 	public AuthResponse signin(SigninRequest request) {

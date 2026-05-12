@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PropsWithChildren } from 'react'
-import { restoreSession, signin, signup, verifyEmail } from '../api/authApi'
+import {
+  resendVerificationOtp as requestVerificationOtpResend,
+  restoreSession,
+  signin,
+  signup,
+  verifyEmail,
+} from '../api/authApi'
 import { tokenStorageKey } from '../../../shared/constants/storage'
 import type { User } from '../types/auth'
 import { AuthSessionStore } from './auth-session-store'
@@ -76,6 +82,16 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     }
   }
 
+  async function resendVerificationOtp(email: string) {
+    setLoading(true)
+    try {
+      const response = await requestVerificationOtpResend({ email })
+      return response.resendCooldownSeconds
+    } finally {
+      setLoading(false)
+    }
+  }
+
   function clearSession() {
     localStorage.removeItem(tokenStorageKey)
     setToken('')
@@ -93,6 +109,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       signinWithPassword,
       signupWithPassword,
       verifyEmailWithOtp,
+      resendVerificationOtp,
       clearSession,
     }),
     [loading, restoring, token, tokenPreview, user],

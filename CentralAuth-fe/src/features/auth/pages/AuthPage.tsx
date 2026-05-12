@@ -6,6 +6,7 @@ import { AuthFormCard } from '../components/AuthFormCard'
 import { VerifyEmailCard } from '../components/VerifyEmailCard'
 import { useAuthSession } from '../context/useAuthSession'
 import { ROUTES } from '../../../shared/constants/routes'
+import { ApiRequestError } from '../../../shared/lib/http'
 
 export type AuthFormValues = {
   email: string
@@ -27,9 +28,13 @@ export function AuthPage({ mode }: AuthPageProps) {
     signinWithPassword,
     signupWithPassword,
     verifyEmailWithOtp,
+    resendVerificationOtp,
   } = useAuthSession()
   const [error, setError] = useState('')
   const [verificationEmail, setVerificationEmail] = useState('')
+  const [resendMessage, setResendMessage] = useState('')
+  const [resendCooldownSeconds, setResendCooldownSeconds] = useState(0)
+  const [resending, setResending] = useState(false)
 
   const routeState = location.state as { verifiedEmail?: string } | null
   const verifiedEmail = routeState?.verifiedEmail ?? ''
@@ -39,6 +44,16 @@ export function AuthPage({ mode }: AuthPageProps) {
       navigate(ROUTES.dashboard, { replace: true })
     }
   }, [navigate, user])
+
+  useEffect(() => {
+    if (resendCooldownSeconds <= 0) return
+
+    const timeout = window.setTimeout(() => {
+      setResendCooldownSeconds((seconds) => Math.max(0, seconds - 1))
+    }, 1000)
+
+    return () => window.clearTimeout(timeout)
+  }, [resendCooldownSeconds])
 
   async function handleSubmit(values: AuthFormValues) {
     setError('')
@@ -50,6 +65,8 @@ export function AuthPage({ mode }: AuthPageProps) {
           values.displayName?.trim() ?? '',
         )
         setVerificationEmail(createdUser.email)
+        setResendMessage('')
+        setResendCooldownSeconds(0)
         return
       }
       await signinWithPassword(values.email, values.password)
@@ -61,6 +78,8 @@ export function AuthPage({ mode }: AuthPageProps) {
   function handleModeChange(nextMode: AuthMode) {
     setError('')
     setVerificationEmail('')
+    setResendMessage('')
+    setResendCooldownSeconds(0)
     navigate(nextMode === 'signup' ? ROUTES.signup : ROUTES.signin)
   }
 
@@ -69,6 +88,8 @@ export function AuthPage({ mode }: AuthPageProps) {
     try {
       await verifyEmailWithOtp(verificationEmail, otp)
       setVerificationEmail('')
+      setResendMessage('')
+      setResendCooldownSeconds(0)
       navigate(ROUTES.signin, {
         replace: true,
         state: { verifiedEmail: verificationEmail },
@@ -78,9 +99,29 @@ export function AuthPage({ mode }: AuthPageProps) {
     }
   }
 
+  async function handleResendVerificationOtp() {
+    setError('')
+    setResendMessage('')
+    setResending(true)
+    try {
+      const cooldownSeconds = await resendVerificationOtp(verificationEmail)
+      setResendCooldownSeconds(cooldownSeconds)
+      setResendMessage('A new OTP has been sent. Check your email to continue.')
+    } catch (requestError) {
+      if (requestError instanceof ApiRequestError && requestError.retryAfterSeconds) {
+        setResendCooldownSeconds(requestError.retryAfterSeconds)
+      }
+      setError(requestError instanceof Error ? requestError.message : 'Request failed')
+    } finally {
+      setResending(false)
+    }
+  }
+
   function handleBackToSignin() {
     setError('')
     setVerificationEmail('')
+    setResendMessage('')
+    setResendCooldownSeconds(0)
     navigate(ROUTES.signin)
   }
 
@@ -101,9 +142,13 @@ export function AuthPage({ mode }: AuthPageProps) {
               {verificationEmail ? (
                 <VerifyEmailCard
                   email={verificationEmail}
-                  loading={loading}
+                  verifying={loading && !resending}
+                  resending={resending}
                   error={error}
+                  resendMessage={resendMessage}
+                  resendCooldownSeconds={resendCooldownSeconds}
                   onBack={handleBackToSignin}
+                  onResend={handleResendVerificationOtp}
                   onSubmit={handleVerifyEmail}
                 />
               ) : (

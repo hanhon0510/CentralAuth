@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.centralauth.auth.dto.AuthResponse;
+import com.centralauth.auth.dto.ResendVerificationOtpRequest;
+import com.centralauth.auth.dto.ResendVerificationOtpResponse;
 import com.centralauth.auth.dto.SigninRequest;
 import com.centralauth.auth.dto.SignupRequest;
 import com.centralauth.auth.dto.UserResponse;
@@ -40,6 +42,12 @@ public class AuthController {
 	public ApiResponse<Void> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
 		authService.verifyEmail(request);
 		return ApiResponse.success("Email verified", null);
+	}
+
+	@PostMapping("/resend-verification-otp")
+	public ApiResponse<ResendVerificationOtpResponse> resendVerificationOtp(
+			@Valid @RequestBody ResendVerificationOtpRequest request) {
+		return ApiResponse.success("Verification OTP resent", authService.resendVerificationOtp(request));
 	}
 
 	@GetMapping("/me")

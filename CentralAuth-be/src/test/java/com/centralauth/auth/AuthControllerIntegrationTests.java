@@ -6,15 +6,19 @@ import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
@@ -104,6 +108,15 @@ class AuthControllerIntegrationTests {
 				otpCaptor.capture(),
 				eq(Duration.ofMinutes(10)));
 		return otpCaptor.getValue();
+	}
+
+	private List<String> captureIssuedOtps(String email, int count) {
+		ArgumentCaptor<String> otpCaptor = ArgumentCaptor.forClass(String.class);
+		verify(valueOperations, times(count)).set(
+				eq("email-verification:" + email),
+				otpCaptor.capture(),
+				eq(Duration.ofMinutes(10)));
+		return otpCaptor.getAllValues();
 	}
 
 	private void verifyEmail(String email, String otp) throws Exception {
@@ -215,6 +228,63 @@ class AuthControllerIntegrationTests {
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.message").value("Invalid or expired email verification OTP"));
+	}
+
+	@Test
+	void resendVerificationOtpIssuesNewOtpForUnverifiedUser() throws Exception {
+		mockMvc().perform(post("/api/v1/auth/signup")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"resend@example.com","password":"Password123!"}
+								"""))
+				.andExpect(status().isOk());
+
+		when(valueOperations.setIfAbsent(
+				eq("email-verification-resend:resend@example.com"),
+				eq("1"),
+				eq(Duration.ofSeconds(60)))).thenReturn(true);
+
+		mockMvc().perform(post("/api/v1/auth/resend-verification-otp")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"resend@example.com"}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Verification OTP resent"))
+				.andExpect(jsonPath("$.data.resendCooldownSeconds").value(60));
+
+		List<String> issuedOtps = captureIssuedOtps("resend@example.com", 2);
+		assertThat(issuedOtps).allMatch(otp -> otp.matches("\\d{6}"));
+	}
+
+	@Test
+	void resendVerificationOtpRejectsRequestsDuringCooldown() throws Exception {
+		mockMvc().perform(post("/api/v1/auth/signup")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"cooldown@example.com","password":"Password123!"}
+								"""))
+				.andExpect(status().isOk());
+
+		when(valueOperations.setIfAbsent(
+				eq("email-verification-resend:cooldown@example.com"),
+				eq("1"),
+				eq(Duration.ofSeconds(60)))).thenReturn(false);
+		when(redisTemplate.getExpire("email-verification-resend:cooldown@example.com", TimeUnit.SECONDS))
+				.thenReturn(42L);
+
+		mockMvc().perform(post("/api/v1/auth/resend-verification-otp")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"cooldown@example.com"}
+								"""))
+				.andExpect(status().isTooManyRequests())
+				.andExpect(header().string("Retry-After", "42"))
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Please wait 42 seconds before requesting another verification OTP"));
+
+		captureIssuedOtps("cooldown@example.com", 1);
 	}
 
 	@Test

@@ -15,6 +15,14 @@ type VerifyEmailPayload = {
   otp: string
 }
 
+type ResendVerificationOtpPayload = {
+  email: string
+}
+
+export type ResendVerificationOtpResponse = {
+  resendCooldownSeconds: number
+}
+
 export function restoreSession(token: string) {
   return apiRequest<User>('/api/v1/auth/me', {
     headers: { Authorization: `Bearer ${token}` },
@@ -31,6 +39,14 @@ export function signin(payload: SigninPayload) {
 
 export function verifyEmail(payload: VerifyEmailPayload) {
   return apiRequest<void>('/api/v1/auth/verify-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function resendVerificationOtp(payload: ResendVerificationOtpPayload) {
+  return apiRequest<ResendVerificationOtpResponse>('/api/v1/auth/resend-verification-otp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

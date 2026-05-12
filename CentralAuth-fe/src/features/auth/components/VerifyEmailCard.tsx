@@ -7,22 +7,37 @@ type VerifyEmailValues = {
 
 type VerifyEmailCardProps = {
   email: string
-  loading: boolean
+  verifying: boolean
+  resending: boolean
   error: string
+  resendMessage: string
+  resendCooldownSeconds: number
   onBack: () => void
+  onResend: () => Promise<void>
   onSubmit: (otp: string) => Promise<void>
 }
 
 export function VerifyEmailCard({
   email,
-  loading,
+  verifying,
+  resending,
   error,
+  resendMessage,
+  resendCooldownSeconds,
   onBack,
+  onResend,
   onSubmit,
 }: VerifyEmailCardProps) {
   async function handleFinish(values: VerifyEmailValues) {
     await onSubmit(values.otp)
   }
+
+  const busy = verifying || resending
+  const resendDisabled = busy || resendCooldownSeconds > 0
+  const resendLabel =
+    resendCooldownSeconds > 0
+      ? `Resend OTP in ${resendCooldownSeconds}s`
+      : 'Resend OTP'
 
   return (
     <Card title="Verify email">
@@ -30,6 +45,7 @@ export function VerifyEmailCard({
         <Typography.Text type="secondary">{email}</Typography.Text>
 
         {error ? <Alert type="error" showIcon message={error} /> : null}
+        {resendMessage ? <Alert type="success" showIcon message={resendMessage} /> : null}
 
         <Form<VerifyEmailValues>
           layout="vertical"
@@ -57,10 +73,13 @@ export function VerifyEmailCard({
           </Form.Item>
 
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
-            <Button type="primary" htmlType="submit" loading={loading} block>
+            <Button type="primary" htmlType="submit" loading={verifying} disabled={resending} block>
               Verify email
             </Button>
-            <Button onClick={onBack} block>
+            <Button onClick={onResend} loading={resending} disabled={resendDisabled} block>
+              {resendLabel}
+            </Button>
+            <Button onClick={onBack} disabled={busy} block>
               Back to sign in
             </Button>
           </Space>
