@@ -177,6 +177,20 @@ class AuthControllerIntegrationTests {
 	}
 
 	@Test
+	void signupUsesVietnameseMessageWhenRequested() throws Exception {
+		mockMvc().perform(post("/api/v1/auth/signup")
+						.header("Accept-Language", "vi")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"signup-vi@example.com","password":"Password123!","displayName":"Signup Vi"}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Đăng ký thành công"))
+				.andExpect(jsonPath("$.data.user.email").value("signup-vi@example.com"));
+	}
+
+	@Test
 	void verifyEmailActivatesUserAndAllowsSignin() throws Exception {
 		mockMvc().perform(post("/api/v1/auth/signup")
 						.contentType(MediaType.APPLICATION_JSON)
@@ -288,6 +302,35 @@ class AuthControllerIntegrationTests {
 	}
 
 	@Test
+	void resendVerificationOtpCooldownUsesVietnameseMessageWhenRequested() throws Exception {
+		mockMvc().perform(post("/api/v1/auth/signup")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"cooldown-vi@example.com","password":"Password123!"}
+								"""))
+				.andExpect(status().isOk());
+
+		when(valueOperations.setIfAbsent(
+				eq("email-verification-resend:cooldown-vi@example.com"),
+				eq("1"),
+				eq(Duration.ofSeconds(60)))).thenReturn(false);
+		when(redisTemplate.getExpire("email-verification-resend:cooldown-vi@example.com", TimeUnit.SECONDS))
+				.thenReturn(42L);
+
+		mockMvc().perform(post("/api/v1/auth/resend-verification-otp")
+						.header("Accept-Language", "vi")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"cooldown-vi@example.com"}
+								"""))
+				.andExpect(status().isTooManyRequests())
+				.andExpect(header().string("Retry-After", "42"))
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message")
+						.value("Vui lòng chờ 42 giây trước khi yêu cầu mã OTP xác minh mới"));
+	}
+
+	@Test
 	void signupRejectsDuplicateEmail() throws Exception {
 		String body = """
 				{"email":"duplicate@example.com","password":"Password123!","displayName":"First"}
@@ -300,6 +343,24 @@ class AuthControllerIntegrationTests {
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.message").value("Email is already registered"));
+	}
+
+	@Test
+	void duplicateEmailUsesVietnameseMessageWhenRequested() throws Exception {
+		String body = """
+				{"email":"duplicate-vi@example.com","password":"Password123!","displayName":"Duplicate Vi"}
+				""";
+
+		mockMvc().perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isOk());
+
+		mockMvc().perform(post("/api/v1/auth/signup")
+						.header("Accept-Language", "vi")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(body))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Email đã được đăng ký"));
 	}
 
 	@Test
