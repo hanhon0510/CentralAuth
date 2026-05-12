@@ -21,9 +21,17 @@ export class ApiRequestError extends Error {
 }
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, withLanguageHeader(init))
+  const language = getCurrentLanguage()
+  const fallback = translate(language, 'common.requestFailed')
+  let response: Response
+
+  try {
+    response = await fetch(path, withLanguageHeader(init, language))
+  } catch {
+    throw new ApiRequestError(fallback, 0)
+  }
+
   const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null
-  const fallback = translate(getCurrentLanguage(), 'common.requestFailed')
 
   if (!response.ok) {
     throw new ApiRequestError(
@@ -40,10 +48,10 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   return payload.data
 }
 
-function withLanguageHeader(init?: RequestInit) {
+function withLanguageHeader(init: RequestInit | undefined, language: string) {
   const headers = new Headers(init?.headers)
   if (!headers.has('Accept-Language')) {
-    headers.set('Accept-Language', getCurrentLanguage())
+    headers.set('Accept-Language', language)
   }
 
   return { ...init, headers }

@@ -12,11 +12,15 @@ export function normalizeLanguage(value: string | null | undefined): Language | 
 }
 
 export function getStoredLanguage() {
-  return normalizeLanguage(localStorage.getItem(languageStorageKey))
+  try {
+    return normalizeLanguage(globalThis.localStorage?.getItem(languageStorageKey))
+  } catch {
+    return null
+  }
 }
 
 export function getBrowserLanguage() {
-  return normalizeLanguage(navigator.language)
+  return normalizeLanguage(globalThis.navigator?.language)
 }
 
 export function getCurrentLanguage(): Language {
@@ -24,5 +28,9 @@ export function getCurrentLanguage(): Language {
 }
 
 export function storeLanguage(language: Language) {
-  localStorage.setItem(languageStorageKey, language)
+  try {
+    globalThis.localStorage?.setItem(languageStorageKey, language)
+  } catch {
+    // Ignore storage failures so React state can still update.
+  }
 }
