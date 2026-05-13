@@ -54,4 +54,25 @@
 		where id = cast(#{id} as uuid)
 		  and revoked = false
 	</update>
+
+	<update id="revokeByTokenHashAndUserId">
+		update refresh_tokens
+		set revoked = true,
+		    revoked_at = #{revokedAt},
+		    updated_at = current_timestamp
+		where token_hash = #{tokenHash}
+		  and user_id = cast(#{userId} as uuid)
+		  and revoked = false
+		  and expires_at > #{revokedAt}
+	</update>
+
+	<update id="revokeAllActiveForUser">
+		update refresh_tokens
+		set revoked = true,
+		    revoked_at = #{revokedAt},
+		    updated_at = current_timestamp
+		where user_id = cast(#{userId} as uuid)
+		  and revoked = false
+		  and expires_at > #{revokedAt}
+	</update>
 </mapper>

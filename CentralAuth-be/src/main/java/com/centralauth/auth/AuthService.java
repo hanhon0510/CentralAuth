@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.centralauth.auth.dto.AuthResponse;
+import com.centralauth.auth.dto.LogoutRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpResponse;
 import com.centralauth.auth.dto.SigninRequest;
@@ -28,16 +29,19 @@ public class AuthService {
 	private final PasswordEncoder passwordEncoder;
 	private final JwtService jwtService;
 	private final EmailVerificationService emailVerificationService;
+	private final RefreshTokenService refreshTokenService;
 
 	public AuthService(
 			UserMapper userMapper,
 			PasswordEncoder passwordEncoder,
 			JwtService jwtService,
-			EmailVerificationService emailVerificationService) {
+			EmailVerificationService emailVerificationService,
+			RefreshTokenService refreshTokenService) {
 		this.userMapper = userMapper;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtService = jwtService;
 		this.emailVerificationService = emailVerificationService;
+		this.refreshTokenService = refreshTokenService;
 	}
 
 	@Transactional
@@ -84,6 +88,7 @@ public class AuthService {
 		return new ResendVerificationOtpResponse(resendCooldownSeconds);
 	}
 
+	@Transactional
 	public AuthResponse signin(SigninRequest request) {
 		User user = userMapper.findByEmail(normalizeEmail(request.email()))
 				.filter(User::enabled)
@@ -94,6 +99,14 @@ public class AuthService {
 		return toAuthResponse(user);
 	}
 
+	public void logout(String userId, LogoutRequest request) {
+		refreshTokenService.revokeRefreshToken(userId, request.refreshToken());
+	}
+
+	public void logoutAllDevices(String userId) {
+		refreshTokenService.revokeAllActiveRefreshTokens(userId);
+	}
+
 	public UserResponse currentUser(String userId) {
 		return userMapper.findById(userId)
 				.filter(User::enabled)
@@ -102,7 +115,10 @@ public class AuthService {
 	}
 
 	private AuthResponse toAuthResponse(User user) {
-		return new AuthResponse(jwtService.createToken(user), UserResponse.from(user));
+		return new AuthResponse(
+				jwtService.createToken(user),
+				refreshTokenService.issueRefreshToken(user.id()),
+				UserResponse.from(user));
 	}
 
 	private String normalizeEmail(String email) {

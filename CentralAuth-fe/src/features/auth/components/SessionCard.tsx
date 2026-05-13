@@ -1,4 +1,4 @@
-import { CheckCircleTwoTone } from '@ant-design/icons'
+import { CheckCircleTwoTone, DisconnectOutlined, LogoutOutlined } from '@ant-design/icons'
 import { Button, Card, Descriptions, Space, Tag, Typography } from 'antd'
 import type { User } from '../types/auth'
 import { useI18n } from '../../../shared/i18n/useI18n'
@@ -6,10 +6,12 @@ import { useI18n } from '../../../shared/i18n/useI18n'
 type SessionCardProps = {
   tokenPreview: string
   user: User
-  onSignOut: () => void
+  loading: boolean
+  onSignOut: () => Promise<void>
+  onSignOutAllDevices: () => Promise<void>
 }
 
-export function SessionCard({ tokenPreview, user, onSignOut }: SessionCardProps) {
+export function SessionCard({ tokenPreview, user, loading, onSignOut, onSignOutAllDevices }: SessionCardProps) {
   const { t } = useI18n()
 
   return (
@@ -34,7 +36,19 @@ export function SessionCard({ tokenPreview, user, onSignOut }: SessionCardProps)
           <Descriptions.Item label={t('session.token')}>{tokenPreview}</Descriptions.Item>
         </Descriptions>
 
-        <Button onClick={onSignOut}>{t('session.signOut')}</Button>
+        <Space wrap>
+          <Button icon={<LogoutOutlined />} loading={loading} onClick={() => void onSignOut().catch(() => undefined)}>
+            {t('session.signOut')}
+          </Button>
+          <Button
+            danger
+            icon={<DisconnectOutlined />}
+            loading={loading}
+            onClick={() => void onSignOutAllDevices().catch(() => undefined)}
+          >
+            {t('session.signOutAllDevices')}
+          </Button>
+        </Space>
       </Space>
     </Card>
   )

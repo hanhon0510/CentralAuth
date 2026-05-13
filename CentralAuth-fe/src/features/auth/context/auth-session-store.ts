@@ -11,6 +11,8 @@ export type AuthSessionContextValue = {
   signupWithPassword: (email: string, password: string, displayName: string) => Promise<User>
   verifyEmailWithOtp: (email: string, otp: string) => Promise<void>
   resendVerificationOtp: (email: string) => Promise<number>
+  signOut: () => Promise<void>
+  signOutAllDevices: () => Promise<void>
   clearSession: () => void
 }
 

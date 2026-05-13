@@ -5,7 +5,7 @@ import { LanguageSwitcher } from '../../../shared/i18n/LanguageSwitcher';
 import { useI18n } from '../../../shared/i18n/useI18n';
 
 export function DashboardPage() {
-  const { user, tokenPreview, clearSession } = useAuthSession();
+  const { user, tokenPreview, loading, signOut, signOutAllDevices } = useAuthSession();
   const { t } = useI18n();
 
   if (!user) return null;
@@ -27,7 +27,9 @@ export function DashboardPage() {
               <SessionCard
                 user={user}
                 tokenPreview={tokenPreview}
-                onSignOut={clearSession}
+                loading={loading}
+                onSignOut={signOut}
+                onSignOutAllDevices={signOutAllDevices}
               />
             </Space>
           </Col>

@@ -9,5 +9,6 @@ export type User = {
 
 export type AuthResponse = {
   token: string
+  refreshToken: string
   user: User
 }

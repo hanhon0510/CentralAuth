@@ -104,6 +104,113 @@ class RefreshTokenMapperIntegrationTests {
 		assertThat(saved.revokedAt()).isEqualTo(Instant.parse("2026-05-14T10:00:00Z"));
 	}
 
+	@Test
+	void revokeByTokenHashAndUserIdRevokesOnlyMatchingActiveRefreshToken() {
+		String userId = createUser("refresh-token-current@example.com");
+		String otherUserId = createUser("refresh-token-current-other@example.com");
+		RefreshToken refreshToken = new RefreshToken(
+				UUID.randomUUID().toString(),
+				userId,
+				"sha256:current-token-hash",
+				Instant.parse("2026-05-13T10:00:00Z"),
+				Instant.parse("2026-06-12T10:00:00Z"),
+				false,
+				null,
+				null,
+				null);
+		RefreshToken otherRefreshToken = new RefreshToken(
+				UUID.randomUUID().toString(),
+				otherUserId,
+				"sha256:other-current-token-hash",
+				Instant.parse("2026-05-13T10:00:00Z"),
+				Instant.parse("2026-06-12T10:00:00Z"),
+				false,
+				null,
+				null,
+				null);
+		refreshTokenMapper.insert(refreshToken);
+		refreshTokenMapper.insert(otherRefreshToken);
+
+		int wrongUserUpdated = refreshTokenMapper.revokeByTokenHashAndUserId(
+				refreshToken.tokenHash(),
+				otherUserId,
+				Instant.parse("2026-05-14T10:00:00Z"));
+		int updated = refreshTokenMapper.revokeByTokenHashAndUserId(
+				refreshToken.tokenHash(),
+				userId,
+				Instant.parse("2026-05-14T10:00:00Z"));
+
+		assertThat(wrongUserUpdated).isZero();
+		assertThat(updated).isEqualTo(1);
+		RefreshToken saved = refreshTokenMapper.findByTokenHash(refreshToken.tokenHash()).orElseThrow();
+		RefreshToken otherSaved = refreshTokenMapper.findByTokenHash(otherRefreshToken.tokenHash()).orElseThrow();
+		assertThat(saved.revoked()).isTrue();
+		assertThat(saved.revokedAt()).isEqualTo(Instant.parse("2026-05-14T10:00:00Z"));
+		assertThat(otherSaved.revoked()).isFalse();
+	}
+
+	@Test
+	void revokeAllActiveForUserRevokesOnlyActiveRefreshTokensForUser() {
+		String userId = createUser("refresh-token-all@example.com");
+		String otherUserId = createUser("refresh-token-all-other@example.com");
+		RefreshToken activeRefreshToken = new RefreshToken(
+				UUID.randomUUID().toString(),
+				userId,
+				"sha256:active-token-hash",
+				Instant.parse("2026-05-13T10:00:00Z"),
+				Instant.parse("2026-06-12T10:00:00Z"),
+				false,
+				null,
+				null,
+				null);
+		RefreshToken alreadyRevokedRefreshToken = new RefreshToken(
+				UUID.randomUUID().toString(),
+				userId,
+				"sha256:already-revoked-token-hash",
+				Instant.parse("2026-05-13T10:00:00Z"),
+				Instant.parse("2026-06-12T10:00:00Z"),
+				true,
+				Instant.parse("2026-05-13T12:00:00Z"),
+				null,
+				null);
+		RefreshToken expiredRefreshToken = new RefreshToken(
+				UUID.randomUUID().toString(),
+				userId,
+				"sha256:expired-token-hash",
+				Instant.parse("2026-04-01T10:00:00Z"),
+				Instant.parse("2026-05-01T10:00:00Z"),
+				false,
+				null,
+				null,
+				null);
+		RefreshToken otherUsersRefreshToken = new RefreshToken(
+				UUID.randomUUID().toString(),
+				otherUserId,
+				"sha256:other-users-active-token-hash",
+				Instant.parse("2026-05-13T10:00:00Z"),
+				Instant.parse("2026-06-12T10:00:00Z"),
+				false,
+				null,
+				null,
+				null);
+		refreshTokenMapper.insert(activeRefreshToken);
+		refreshTokenMapper.insert(alreadyRevokedRefreshToken);
+		refreshTokenMapper.insert(expiredRefreshToken);
+		refreshTokenMapper.insert(otherUsersRefreshToken);
+
+		int updated = refreshTokenMapper.revokeAllActiveForUser(
+				userId,
+				Instant.parse("2026-05-14T10:00:00Z"));
+
+		assertThat(updated).isEqualTo(1);
+		assertThat(refreshTokenMapper.findByTokenHash(activeRefreshToken.tokenHash()).orElseThrow().revoked()).isTrue();
+		RefreshToken alreadyRevoked = refreshTokenMapper.findByTokenHash(alreadyRevokedRefreshToken.tokenHash()).orElseThrow();
+		assertThat(alreadyRevoked.revoked()).isTrue();
+		assertThat(alreadyRevoked.revokedAt()).isEqualTo(Instant.parse("2026-05-13T12:00:00Z"));
+		assertThat(refreshTokenMapper.findByTokenHash(expiredRefreshToken.tokenHash()).orElseThrow().revoked()).isFalse();
+		assertThat(refreshTokenMapper.findByTokenHash(otherUsersRefreshToken.tokenHash()).orElseThrow().revoked()).isFalse();
+	}
+
 	private String createUser(String email) {
 		UUID userId = UUID.randomUUID();
 		jdbcTemplate.update("""

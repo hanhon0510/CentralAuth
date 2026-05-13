@@ -33,6 +33,7 @@ export const messages = {
     'session.emailVerified': 'Email verified',
     'session.token': 'Token',
     'session.signOut': 'Sign out',
+    'session.signOutAllDevices': 'Sign out all devices',
   },
   vi: {
     'common.requestFailed': 'Yêu cầu thất bại',
@@ -68,6 +69,7 @@ export const messages = {
     'session.emailVerified': 'Email đã xác minh',
     'session.token': 'Token',
     'session.signOut': 'Đăng xuất',
+    'session.signOutAllDevices': 'Đăng xuất tất cả thiết bị',
   },
 } as const
 

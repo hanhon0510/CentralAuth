@@ -133,9 +133,51 @@ class AuthControllerIntegrationTests {
 	}
 
 	private String tokenFrom(MvcResult result) throws Exception {
+		return stringFieldFrom(result, "token");
+	}
+
+	private String refreshTokenFrom(MvcResult result) throws Exception {
+		return stringFieldFrom(result, "refreshToken");
+	}
+
+	private String stringFieldFrom(MvcResult result, String fieldName) throws Exception {
 		String response = result.getResponse().getContentAsString();
-		String token = response.substring(response.indexOf("\"token\":\"") + 9);
-		return token.substring(0, token.indexOf('"'));
+		String marker = "\"" + fieldName + "\":\"";
+		int start = response.indexOf(marker);
+		assertThat(start).isNotNegative();
+		String value = response.substring(start + marker.length());
+		return value.substring(0, value.indexOf('"'));
+	}
+
+	private MvcResult signin(String email, String password) throws Exception {
+		return mockMvc().perform(post("/api/v1/auth/signin")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"%s","password":"%s"}
+								""".formatted(email, password)))
+				.andExpect(status().isOk())
+				.andReturn();
+	}
+
+	private void signupAndVerify(String email) throws Exception {
+		mockMvc().perform(post("/api/v1/auth/signup")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"%s","password":"Password123!","displayName":"Session User"}
+								""".formatted(email)))
+				.andExpect(status().isOk());
+		verifyEmail(email, captureSignupOtp(email));
+	}
+
+	private int activeRefreshTokenCount(String email) {
+		return jdbcTemplate.queryForObject("""
+				select count(*)
+				from refresh_tokens rt
+				join users u on u.id = rt.user_id
+				where u.email = ?
+				  and rt.revoked = false
+				  and rt.expires_at > current_timestamp
+				""", Integer.class, email);
 	}
 
 	@Test
@@ -383,6 +425,79 @@ class AuthControllerIntegrationTests {
 				.andExpect(jsonPath("$.message").value("Signin successful"))
 				.andExpect(jsonPath("$.data.token", not(blankOrNullString())))
 				.andExpect(jsonPath("$.data.user.email").value("signin@example.com"));
+	}
+
+	@Test
+	void signinIssuesRefreshTokenAndStoresOnlyItsHash() throws Exception {
+		signupAndVerify("signin-refresh@example.com");
+
+		MvcResult signin = signin("signin-refresh@example.com", "Password123!");
+
+		String refreshToken = refreshTokenFrom(signin);
+		assertThat(refreshToken).isNotBlank();
+		assertThat(jdbcTemplate.queryForObject("""
+				select count(*)
+				from refresh_tokens rt
+				join users u on u.id = rt.user_id
+				where u.email = ?
+				  and rt.revoked = false
+				  and rt.token_hash <> ?
+				""", Integer.class, "signin-refresh@example.com", refreshToken)).isGreaterThanOrEqualTo(1);
+	}
+
+	@Test
+	void logoutRevokesCurrentRefreshTokenOnlyOnce() throws Exception {
+		signupAndVerify("logout-current@example.com");
+		MvcResult firstSignin = signin("logout-current@example.com", "Password123!");
+		MvcResult secondSignin = signin("logout-current@example.com", "Password123!");
+		String accessToken = tokenFrom(secondSignin);
+		String refreshToken = refreshTokenFrom(secondSignin);
+		int activeBeforeLogout = activeRefreshTokenCount("logout-current@example.com");
+		assertThat(activeBeforeLogout).isGreaterThanOrEqualTo(2);
+
+		mockMvc().perform(post("/api/v1/auth/logout")
+						.header("Authorization", "Bearer " + accessToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"refreshToken":"%s"}
+								""".formatted(refreshToken)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Logout successful"));
+
+		assertThat(activeRefreshTokenCount("logout-current@example.com")).isEqualTo(activeBeforeLogout - 1);
+
+		mockMvc().perform(post("/api/v1/auth/logout")
+						.header("Authorization", "Bearer " + tokenFrom(firstSignin))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"refreshToken":"%s"}
+								""".formatted(refreshToken)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Logout successful"));
+
+		assertThat(activeRefreshTokenCount("logout-current@example.com")).isEqualTo(activeBeforeLogout - 1);
+	}
+
+	@Test
+	void logoutAllDevicesRevokesOnlyAuthenticatedUsersActiveRefreshTokens() throws Exception {
+		signupAndVerify("logout-all@example.com");
+		signupAndVerify("logout-all-other@example.com");
+		MvcResult firstSignin = signin("logout-all@example.com", "Password123!");
+		signin("logout-all@example.com", "Password123!");
+		signin("logout-all-other@example.com", "Password123!");
+		int otherUsersActiveTokens = activeRefreshTokenCount("logout-all-other@example.com");
+		assertThat(activeRefreshTokenCount("logout-all@example.com")).isGreaterThanOrEqualTo(2);
+
+		mockMvc().perform(post("/api/v1/auth/logout-all-devices")
+						.header("Authorization", "Bearer " + tokenFrom(firstSignin)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Logged out from all devices"));
+
+		assertThat(activeRefreshTokenCount("logout-all@example.com")).isZero();
+		assertThat(activeRefreshTokenCount("logout-all-other@example.com")).isEqualTo(otherUsersActiveTokens);
 	}
 
 	@Test

@@ -1,19 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PropsWithChildren } from 'react'
 import {
+  logout,
+  logoutAllDevices,
   resendVerificationOtp as requestVerificationOtpResend,
   restoreSession,
   signin,
   signup,
   verifyEmail,
 } from '../api/authApi'
-import { tokenStorageKey } from '../../../shared/constants/storage'
-import type { User } from '../types/auth'
+import { refreshTokenStorageKey, tokenStorageKey } from '../../../shared/constants/storage'
+import type { AuthResponse, User } from '../types/auth'
 import { AuthSessionStore } from './auth-session-store'
 
 export function AuthSessionProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(false)
   const [token, setToken] = useState(() => localStorage.getItem(tokenStorageKey) ?? '')
+  const [refreshToken, setRefreshToken] = useState(() => localStorage.getItem(refreshTokenStorageKey) ?? '')
   const [user, setUser] = useState<User | null>(null)
   const [restoring, setRestoring] = useState(Boolean(token))
 
@@ -55,9 +58,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     setLoading(true)
     try {
       const response = await signin({ email, password })
-      localStorage.setItem(tokenStorageKey, response.token)
-      setToken(response.token)
-      setUser(response.user)
+      storeSession(response)
     } finally {
       setLoading(false)
     }
@@ -92,28 +93,67 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     }
   }
 
+  async function signOut() {
+    if (!token || !refreshToken) {
+      clearSession()
+      return
+    }
+
+    setLoading(true)
+    try {
+      await logout(token, refreshToken)
+    } finally {
+      clearSession()
+      setLoading(false)
+    }
+  }
+
+  async function signOutAllDevices() {
+    if (!token) {
+      clearSession()
+      return
+    }
+
+    setLoading(true)
+    try {
+      await logoutAllDevices(token)
+    } finally {
+      clearSession()
+      setLoading(false)
+    }
+  }
+
+  function storeSession(response: AuthResponse) {
+    localStorage.setItem(tokenStorageKey, response.token)
+    localStorage.setItem(refreshTokenStorageKey, response.refreshToken)
+    setToken(response.token)
+    setRefreshToken(response.refreshToken)
+    setUser(response.user)
+  }
+
   function clearSession() {
     localStorage.removeItem(tokenStorageKey)
+    localStorage.removeItem(refreshTokenStorageKey)
     setToken('')
+    setRefreshToken('')
     setUser(null)
     setRestoring(false)
   }
 
-  const value = useMemo(
-    () => ({
-      loading,
-      restoring,
-      token,
-      tokenPreview,
-      user,
-      signinWithPassword,
-      signupWithPassword,
-      verifyEmailWithOtp,
-      resendVerificationOtp,
-      clearSession,
-    }),
-    [loading, restoring, token, tokenPreview, user],
-  )
+  const value = {
+    loading,
+    restoring,
+    token,
+    tokenPreview,
+    user,
+    signinWithPassword,
+    signupWithPassword,
+    verifyEmailWithOtp,
+    resendVerificationOtp,
+    signOut,
+    signOutAllDevices,
+    clearSession,
+  }
 
   return <AuthSessionStore.Provider value={value}>{children}</AuthSessionStore.Provider>
 }

@@ -53,6 +53,24 @@ export function resendVerificationOtp(payload: ResendVerificationOtpPayload) {
   })
 }
 
+export function logout(token: string, refreshToken: string) {
+  return apiRequest<void>('/api/v1/auth/logout', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ refreshToken }),
+  })
+}
+
+export function logoutAllDevices(token: string) {
+  return apiRequest<void>('/api/v1/auth/logout-all-devices', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
 export function signup(payload: SignupPayload) {
   return apiRequest<AuthResponse>('/api/v1/auth/signup', {
     method: 'POST',

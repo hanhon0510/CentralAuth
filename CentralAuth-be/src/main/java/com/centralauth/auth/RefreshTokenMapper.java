@@ -17,4 +17,11 @@ public interface RefreshTokenMapper {
 	List<RefreshToken> findByUserId(@Param("userId") String userId);
 
 	int revoke(@Param("id") String id, @Param("revokedAt") Instant revokedAt);
+
+	int revokeByTokenHashAndUserId(
+			@Param("tokenHash") String tokenHash,
+			@Param("userId") String userId,
+			@Param("revokedAt") Instant revokedAt);
+
+	int revokeAllActiveForUser(@Param("userId") String userId, @Param("revokedAt") Instant revokedAt);
 }

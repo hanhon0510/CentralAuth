@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.centralauth.auth.dto.AuthResponse;
+import com.centralauth.auth.dto.LogoutRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpResponse;
 import com.centralauth.auth.dto.SigninRequest;
@@ -51,6 +52,18 @@ public class AuthController {
 	public ApiResponse<ResendVerificationOtpResponse> resendVerificationOtp(
 			@Valid @RequestBody ResendVerificationOtpRequest request) {
 		return ApiResponse.success(messages.get("auth.verificationOtp.resent"), authService.resendVerificationOtp(request));
+	}
+
+	@PostMapping("/logout")
+	public ApiResponse<Void> logout(Authentication authentication, @Valid @RequestBody LogoutRequest request) {
+		authService.logout((String) authentication.getPrincipal(), request);
+		return ApiResponse.success(messages.get("auth.logout.success"), null);
+	}
+
+	@PostMapping("/logout-all-devices")
+	public ApiResponse<Void> logoutAllDevices(Authentication authentication) {
+		authService.logoutAllDevices((String) authentication.getPrincipal());
+		return ApiResponse.success(messages.get("auth.logoutAllDevices.success"), null);
 	}
 
 	@GetMapping("/me")

@@ -68,6 +68,8 @@ centralauth:
     secret: ${CENTRALAUTH_JWT_SECRET:dev-secret-change-me-at-least-32-chars}
     issuer: ${CENTRALAUTH_JWT_ISSUER:central-auth}
     expires-in-seconds: ${CENTRALAUTH_JWT_EXPIRES_IN_SECONDS:3600}
+  refresh-token:
+    expires-in-seconds: ${CENTRALAUTH_REFRESH_TOKEN_EXPIRES_IN_SECONDS:2592000}
   kafka:
     topics:
       user-registered: auth.user.registered
