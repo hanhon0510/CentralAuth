@@ -87,6 +87,7 @@ public class AuthService {
 	public AuthResponse signin(SigninRequest request) {
 		User user = userMapper.findByEmail(normalizeEmail(request.email()))
 				.filter(User::enabled)
+				.filter(User::emailVerified)
 				.filter(candidate -> passwordEncoder.matches(request.password(), candidate.passwordHash()))
 				.orElseThrow(InvalidCredentialsException::new);
 

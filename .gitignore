@@ -72,3 +72,4 @@ lerna-debug.log*
 *.sw?
 
 /docs/*
+AGENTS.md

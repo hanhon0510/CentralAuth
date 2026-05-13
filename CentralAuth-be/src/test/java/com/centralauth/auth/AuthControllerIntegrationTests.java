@@ -405,6 +405,29 @@ class AuthControllerIntegrationTests {
 	}
 
 	@Test
+	void signinRejectsEnabledUserWithoutVerifiedEmail() throws Exception {
+		mockMvc().perform(post("/api/v1/auth/signup")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"enabled-unverified@example.com","password":"Password123!"}
+								"""))
+				.andExpect(status().isOk());
+
+		jdbcTemplate.update(
+				"update users set enabled = true, email_verified = false where email = ?",
+				"enabled-unverified@example.com");
+
+		mockMvc().perform(post("/api/v1/auth/signin")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"enabled-unverified@example.com","password":"Password123!"}
+								"""))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Invalid email or password"));
+	}
+
+	@Test
 	void meReturnsCurrentUserForBearerToken() throws Exception {
 		MvcResult signup = mockMvc().perform(post("/api/v1/auth/signup")
 						.contentType(MediaType.APPLICATION_JSON)
