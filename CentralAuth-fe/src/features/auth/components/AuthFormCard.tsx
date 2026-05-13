@@ -45,7 +45,7 @@ export function AuthFormCard({
       .map(({ name }) => name);
 
     if (fieldsWithErrors.length > 0) {
-      void form.validateFields(fieldsWithErrors);
+      void form.validateFields(fieldsWithErrors).catch(() => undefined);
     }
   }, [form, language]);
 
