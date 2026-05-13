@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+		PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.centralauth.auth.RefreshTokenMapper">
+
+	<select id="findByTokenHash" resultType="com.centralauth.auth.RefreshToken">
+		select cast(id as varchar) as id,
+		       cast(user_id as varchar) as user_id,
+		       token_hash,
+		       issued_at,
+		       expires_at,
+		       revoked,
+		       revoked_at,
+		       created_at,
+		       updated_at
+		from refresh_tokens
+		where token_hash = #{tokenHash}
+	</select>
+
+	<select id="findByUserId" resultType="com.centralauth.auth.RefreshToken">
+		select cast(id as varchar) as id,
+		       cast(user_id as varchar) as user_id,
+		       token_hash,
+		       issued_at,
+		       expires_at,
+		       revoked,
+		       revoked_at,
+		       created_at,
+		       updated_at
+		from refresh_tokens
+		where user_id = cast(#{userId} as uuid)
+		order by issued_at desc
+	</select>
+
+	<insert id="insert" parameterType="com.centralauth.auth.RefreshToken">
+		insert into refresh_tokens (id, user_id, token_hash, issued_at, expires_at, revoked, revoked_at)
+		values (
+		    cast(#{id} as uuid),
+		    cast(#{userId} as uuid),
+		    #{tokenHash},
+		    #{issuedAt},
+		    #{expiresAt},
+		    #{revoked},
+		    #{revokedAt}
+		)
+	</insert>
+
+	<update id="revoke">
+		update refresh_tokens
+		set revoked = true,
+		    revoked_at = #{revokedAt},
+		    updated_at = current_timestamp
+		where id = cast(#{id} as uuid)
+		  and revoked = false
+	</update>
+</mapper>

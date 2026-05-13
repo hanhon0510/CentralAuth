@@ -447,4 +447,26 @@ class AuthControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.email").value("me@example.com"))
 				.andExpect(jsonPath("$.data.displayName").value("Me User"));
 	}
+
+	@Test
+	void usersMeReturnsCurrentUserForBearerToken() throws Exception {
+		MvcResult signup = mockMvc().perform(post("/api/v1/auth/signup")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"users-me@example.com","password":"Password123!","displayName":"Users Me"}
+								"""))
+				.andExpect(status().isOk())
+				.andReturn();
+		verifyEmail("users-me@example.com", captureSignupOtp("users-me@example.com"));
+
+		String token = tokenFrom(signup);
+
+		mockMvc().perform(get("/api/v1/users/me").header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Current user"))
+				.andExpect(jsonPath("$.data.email").value("users-me@example.com"))
+				.andExpect(jsonPath("$.data.displayName").value("Users Me"))
+				.andExpect(jsonPath("$.data.emailVerified").value(true));
+	}
 }
