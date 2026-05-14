@@ -28,15 +28,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
 			throws ServletException, IOException {
 		String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
-		if (authorization != null && authorization.startsWith("Bearer ")) {
-			jwtService.validate(authorization.substring(7))
-					.ifPresent(principal -> SecurityContextHolder.getContext().setAuthentication(
-							new UsernamePasswordAuthenticationToken(
-									principal.userId(),
-									null,
-									List.of(new SimpleGrantedAuthority("ROLE_USER")))));
+		if (authorization == null || !authorization.startsWith("Bearer ")) {
+			filterChain.doFilter(request, response);
+			return;
 		}
 
+		jwtService.validate(authorization.substring(7))
+				.ifPresentOrElse(
+						principal -> SecurityContextHolder.getContext().setAuthentication(authentication(principal)),
+						SecurityContextHolder::clearContext);
+
 		filterChain.doFilter(request, response);
+	}
+
+	private UsernamePasswordAuthenticationToken authentication(JwtPrincipal principal) {
+		return new UsernamePasswordAuthenticationToken(
+				principal.userId(),
+				null,
+				List.of(new SimpleGrantedAuthority("ROLE_USER")));
 	}
 }

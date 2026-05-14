@@ -14,9 +14,13 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
 	private final JwtAuthenticationFilter jwtAuthenticationFilter;
+	private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
 
-	public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+	public SecurityConfig(
+			JwtAuthenticationFilter jwtAuthenticationFilter,
+			RestAuthenticationEntryPoint restAuthenticationEntryPoint) {
 		this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+		this.restAuthenticationEntryPoint = restAuthenticationEntryPoint;
 	}
 
 	@Bean
@@ -34,6 +38,7 @@ public class SecurityConfig {
 								"/actuator/health",
 								"/actuator/info").permitAll()
 						.anyRequest().authenticated())
+				.exceptionHandling(exception -> exception.authenticationEntryPoint(restAuthenticationEntryPoint))
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
 				.httpBasic(AbstractHttpConfigurer::disable)
 				.formLogin(AbstractHttpConfigurer::disable)

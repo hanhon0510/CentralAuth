@@ -584,4 +584,12 @@ class AuthControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.displayName").value("Users Me"))
 				.andExpect(jsonPath("$.data.emailVerified").value(true));
 	}
+
+	@Test
+	void protectedEndpointRejectsInvalidBearerToken() throws Exception {
+		mockMvc().perform(get("/api/v1/users/me").header("Authorization", "Bearer not-a-valid-token"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Unauthorized"));
+	}
 }
