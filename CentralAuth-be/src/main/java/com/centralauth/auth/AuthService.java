@@ -30,18 +30,21 @@ public class AuthService {
 	private final JwtService jwtService;
 	private final EmailVerificationService emailVerificationService;
 	private final RefreshTokenService refreshTokenService;
+	private final LoginAttemptService loginAttemptService;
 
 	public AuthService(
 			UserMapper userMapper,
 			PasswordEncoder passwordEncoder,
 			JwtService jwtService,
 			EmailVerificationService emailVerificationService,
-			RefreshTokenService refreshTokenService) {
+			RefreshTokenService refreshTokenService,
+			LoginAttemptService loginAttemptService) {
 		this.userMapper = userMapper;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtService = jwtService;
 		this.emailVerificationService = emailVerificationService;
 		this.refreshTokenService = refreshTokenService;
+		this.loginAttemptService = loginAttemptService;
 	}
 
 	@Transactional
@@ -89,13 +92,21 @@ public class AuthService {
 	}
 
 	@Transactional
-	public AuthResponse signin(SigninRequest request) {
-		User user = userMapper.findByEmail(normalizeEmail(request.email()))
+	public AuthResponse signin(SigninRequest request, String clientIp) {
+		String email = normalizeEmail(request.email());
+		loginAttemptService.recordAttempt(email, clientIp);
+		loginAttemptService.requireLoginAllowed(email, clientIp);
+		User user = userMapper.findByEmail(email)
 				.filter(User::enabled)
 				.filter(User::emailVerified)
 				.filter(candidate -> passwordEncoder.matches(request.password(), candidate.passwordHash()))
-				.orElseThrow(InvalidCredentialsException::new);
+				.orElse(null);
+		if (user == null) {
+			loginAttemptService.recordFailure(email, clientIp);
+			throw new InvalidCredentialsException();
+		}
 
+		loginAttemptService.recordSuccess(email, clientIp);
 		return toAuthResponse(user);
 	}
 

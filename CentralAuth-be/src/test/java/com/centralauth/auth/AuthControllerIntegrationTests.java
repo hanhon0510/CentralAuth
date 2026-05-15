@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -32,6 +33,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -150,13 +152,18 @@ class AuthControllerIntegrationTests {
 	}
 
 	private MvcResult signin(String email, String password) throws Exception {
+		return signinAttempt(email, password, "127.0.0.1")
+				.andExpect(status().isOk())
+				.andReturn();
+	}
+
+	private ResultActions signinAttempt(String email, String password, String clientIp) throws Exception {
 		return mockMvc().perform(post("/api/v1/auth/signin")
+						.header("X-Forwarded-For", clientIp)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"email":"%s","password":"%s"}
-								""".formatted(email, password)))
-				.andExpect(status().isOk())
-				.andReturn();
+								""".formatted(email, password)));
 	}
 
 	private void signupAndVerify(String email) throws Exception {
@@ -517,6 +524,140 @@ class AuthControllerIntegrationTests {
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.message").value("Invalid email or password"));
+	}
+
+	@Test
+	void signinRateLimitsEmailWithinShortWindow() throws Exception {
+		signupAndVerify("rate-limit@example.com");
+		when(valueOperations.increment("login-rate:email:rate-limit@example.com"))
+				.thenReturn(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L);
+		when(redisTemplate.getExpire("login-rate:email:rate-limit@example.com", TimeUnit.SECONDS))
+				.thenReturn(45L);
+
+		for (int index = 1; index <= 10; index++) {
+			String clientIp = "203.0.113." + index;
+			when(valueOperations.increment("login-rate:ip:" + clientIp)).thenReturn(1L);
+
+			signinAttempt("rate-limit@example.com", "Password123!", clientIp)
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.success").value(true))
+					.andExpect(jsonPath("$.message").value("Signin successful"));
+		}
+		when(valueOperations.increment("login-rate:ip:203.0.113.11")).thenReturn(1L);
+
+		signinAttempt("rate-limit@example.com", "Password123!", "203.0.113.11")
+				.andExpect(status().isTooManyRequests())
+				.andExpect(header().string("Retry-After", "45"))
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message")
+						.value("Too many login attempts. Please try again in 45 seconds"));
+
+		verify(valueOperations, times(11)).increment("login-rate:email:rate-limit@example.com");
+		verify(redisTemplate).expire("login-rate:email:rate-limit@example.com", Duration.ofMinutes(1));
+	}
+
+	@Test
+	void signinClearsTrackedFailuresAfterSuccessfulLogin() throws Exception {
+		signupAndVerify("tracked-success@example.com");
+		when(redisTemplate.getExpire("login-lock:email:tracked-success@example.com", TimeUnit.SECONDS))
+				.thenReturn(-2L);
+		when(redisTemplate.getExpire("login-lock:ip:203.0.113.50", TimeUnit.SECONDS))
+				.thenReturn(-2L);
+		when(valueOperations.increment("login-failure:email:tracked-success@example.com")).thenReturn(1L);
+		when(valueOperations.increment("login-failure:ip:203.0.113.50")).thenReturn(1L);
+
+		signinAttempt("tracked-success@example.com", "wrong-password", "203.0.113.50")
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Invalid email or password"));
+
+		signinAttempt("tracked-success@example.com", "Password123!", "203.0.113.50")
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Signin successful"));
+
+		verify(valueOperations).increment("login-failure:email:tracked-success@example.com");
+		verify(valueOperations).increment("login-failure:ip:203.0.113.50");
+		verify(redisTemplate).delete(List.of(
+				"login-failure:email:tracked-success@example.com",
+				"login-failure:ip:203.0.113.50"));
+	}
+
+	@Test
+	void signinTemporarilyLocksEmailAfterTooManyFailedAttempts() throws Exception {
+		signupAndVerify("email-lock@example.com");
+		when(redisTemplate.getExpire("login-lock:email:email-lock@example.com", TimeUnit.SECONDS))
+				.thenReturn(-2L, -2L, -2L, -2L, -2L, 900L);
+		when(valueOperations.increment("login-failure:email:email-lock@example.com"))
+				.thenReturn(1L, 2L, 3L, 4L, 5L);
+		for (String clientIp : Arrays.asList(
+				"203.0.113.1",
+				"203.0.113.2",
+				"203.0.113.3",
+				"203.0.113.4",
+				"203.0.113.5")) {
+			when(redisTemplate.getExpire("login-lock:ip:" + clientIp, TimeUnit.SECONDS))
+					.thenReturn(-2L);
+			when(valueOperations.increment("login-failure:ip:" + clientIp)).thenReturn(1L);
+
+			signinAttempt("email-lock@example.com", "wrong-password", clientIp)
+					.andExpect(status().isUnauthorized())
+					.andExpect(jsonPath("$.success").value(false))
+					.andExpect(jsonPath("$.message").value("Invalid email or password"));
+		}
+		when(redisTemplate.getExpire("login-lock:ip:203.0.113.99", TimeUnit.SECONDS))
+				.thenReturn(-2L);
+
+		signinAttempt("email-lock@example.com", "Password123!", "203.0.113.99")
+				.andExpect(status().isTooManyRequests())
+				.andExpect(header().string("Retry-After", "900"))
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message")
+						.value("Too many failed login attempts. Please try again in 900 seconds"));
+
+		verify(valueOperations, times(5)).increment("login-failure:email:email-lock@example.com");
+		verify(valueOperations).set(
+				eq("login-lock:email:email-lock@example.com"),
+				eq("1"),
+				eq(Duration.ofMinutes(15)));
+	}
+
+	@Test
+	void signinTemporarilyLocksIpAfterTooManyFailedAttempts() throws Exception {
+		String lockedIp = "198.51.100.20";
+		when(redisTemplate.getExpire("login-lock:ip:" + lockedIp, TimeUnit.SECONDS))
+				.thenReturn(-2L, -2L, -2L, -2L, -2L, 600L);
+		when(valueOperations.increment("login-failure:ip:" + lockedIp))
+				.thenReturn(1L, 2L, 3L, 4L, 5L);
+
+		for (int index = 1; index <= 5; index++) {
+			String email = "ip-lock-" + index + "@example.com";
+			signupAndVerify(email);
+			when(redisTemplate.getExpire("login-lock:email:" + email, TimeUnit.SECONDS))
+					.thenReturn(-2L);
+			when(valueOperations.increment("login-failure:email:" + email)).thenReturn(1L);
+
+			signinAttempt(email, "wrong-password", lockedIp)
+					.andExpect(status().isUnauthorized())
+					.andExpect(jsonPath("$.success").value(false))
+					.andExpect(jsonPath("$.message").value("Invalid email or password"));
+		}
+		signupAndVerify("ip-lock-valid@example.com");
+		when(redisTemplate.getExpire("login-lock:email:ip-lock-valid@example.com", TimeUnit.SECONDS))
+				.thenReturn(-2L);
+
+		signinAttempt("ip-lock-valid@example.com", "Password123!", lockedIp)
+				.andExpect(status().isTooManyRequests())
+				.andExpect(header().string("Retry-After", "600"))
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message")
+						.value("Too many failed login attempts. Please try again in 600 seconds"));
+
+		verify(valueOperations, times(5)).increment("login-failure:ip:" + lockedIp);
+		verify(valueOperations).set(
+				eq("login-lock:ip:" + lockedIp),
+				eq("1"),
+				eq(Duration.ofMinutes(15)));
 	}
 
 	@Test

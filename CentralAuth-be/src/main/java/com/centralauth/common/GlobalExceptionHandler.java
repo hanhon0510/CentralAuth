@@ -12,6 +12,8 @@ import com.centralauth.auth.EmailVerificationNotPendingException;
 import com.centralauth.auth.EmailVerificationOtpResendThrottledException;
 import com.centralauth.auth.InvalidEmailVerificationOtpException;
 import com.centralauth.auth.InvalidCredentialsException;
+import com.centralauth.auth.LoginRateLimitExceededException;
+import com.centralauth.auth.LoginTemporarilyLockedException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -50,6 +52,20 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(EmailVerificationOtpResendThrottledException.class)
 	public ResponseEntity<ApiResponse<Void>> handleEmailVerificationOtpResendThrottled(
 			EmailVerificationOtpResendThrottledException ex) {
+		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+				.header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.retryAfterSeconds()))
+				.body(ApiResponse.error(messages.get(ex)));
+	}
+
+	@ExceptionHandler(LoginTemporarilyLockedException.class)
+	public ResponseEntity<ApiResponse<Void>> handleLoginTemporarilyLocked(LoginTemporarilyLockedException ex) {
+		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+				.header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.retryAfterSeconds()))
+				.body(ApiResponse.error(messages.get(ex)));
+	}
+
+	@ExceptionHandler(LoginRateLimitExceededException.class)
+	public ResponseEntity<ApiResponse<Void>> handleLoginRateLimitExceeded(LoginRateLimitExceededException ex) {
 		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
 				.header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.retryAfterSeconds()))
 				.body(ApiResponse.error(messages.get(ex)));

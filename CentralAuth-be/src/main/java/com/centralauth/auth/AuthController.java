@@ -1,6 +1,7 @@
 package com.centralauth.auth;
 
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +19,7 @@ import com.centralauth.auth.dto.SignupRequest;
 import com.centralauth.auth.dto.UserResponse;
 import com.centralauth.auth.dto.VerifyEmailRequest;
 import com.centralauth.common.ApiResponse;
+import com.centralauth.common.ClientIpResolver;
 import com.centralauth.common.Messages;
 
 @RestController
@@ -26,10 +28,12 @@ public class AuthController {
 
 	private final AuthService authService;
 	private final Messages messages;
+	private final ClientIpResolver clientIpResolver;
 
-	public AuthController(AuthService authService, Messages messages) {
+	public AuthController(AuthService authService, Messages messages, ClientIpResolver clientIpResolver) {
 		this.authService = authService;
 		this.messages = messages;
+		this.clientIpResolver = clientIpResolver;
 	}
 
 	@PostMapping("/signup")
@@ -38,8 +42,12 @@ public class AuthController {
 	}
 
 	@PostMapping("/signin")
-	public ApiResponse<AuthResponse> signin(@Valid @RequestBody SigninRequest request) {
-		return ApiResponse.success(messages.get("auth.signin.success"), authService.signin(request));
+	public ApiResponse<AuthResponse> signin(
+			@Valid @RequestBody SigninRequest request,
+			HttpServletRequest httpRequest) {
+		return ApiResponse.success(
+				messages.get("auth.signin.success"),
+				authService.signin(request, clientIpResolver.resolve(httpRequest)));
 	}
 
 	@PostMapping("/verify-email")

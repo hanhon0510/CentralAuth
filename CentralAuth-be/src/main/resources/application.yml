@@ -65,11 +65,18 @@ centralauth:
     otp-ttl: ${CENTRALAUTH_EMAIL_VERIFICATION_OTP_TTL:10m}
     resend-cooldown: ${CENTRALAUTH_EMAIL_VERIFICATION_RESEND_COOLDOWN:60s}
   jwt:
-    secret: ${CENTRALAUTH_JWT_SECRET:dev-secret-change-me-at-least-32-chars}
+    secret: ${CENTRALAUTH_JWT_SECRET:cbdhhcbdhbcwhbhdcbdhcbhdbchdcbhdcccc}
     issuer: ${CENTRALAUTH_JWT_ISSUER:central-auth}
     expires-in-seconds: ${CENTRALAUTH_JWT_EXPIRES_IN_SECONDS:3600}
   refresh-token:
     expires-in-seconds: ${CENTRALAUTH_REFRESH_TOKEN_EXPIRES_IN_SECONDS:2592000}
+  login-protection:
+    max-failed-attempts: ${CENTRALAUTH_LOGIN_PROTECTION_MAX_FAILED_ATTEMPTS:5}
+    failure-window: ${CENTRALAUTH_LOGIN_PROTECTION_FAILURE_WINDOW:15m}
+    lock-duration: ${CENTRALAUTH_LOGIN_PROTECTION_LOCK_DURATION:15m}
+    rate-limit:
+      max-attempts: ${CENTRALAUTH_LOGIN_RATE_LIMIT_MAX_ATTEMPTS:10}
+      window: ${CENTRALAUTH_LOGIN_RATE_LIMIT_WINDOW:1m}
   kafka:
     topics:
       user-registered: auth.user.registered
