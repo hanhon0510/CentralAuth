@@ -9,9 +9,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.centralauth.auth.dto.AuthResponse;
+import com.centralauth.auth.dto.ForgotPasswordRequest;
 import com.centralauth.auth.dto.LogoutRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpResponse;
+import com.centralauth.auth.dto.ResetPasswordRequest;
 import com.centralauth.auth.dto.SigninRequest;
 import com.centralauth.auth.dto.SignupRequest;
 import com.centralauth.auth.dto.UserResponse;
@@ -31,6 +33,7 @@ public class AuthService {
 	private final EmailVerificationService emailVerificationService;
 	private final RefreshTokenService refreshTokenService;
 	private final LoginAttemptService loginAttemptService;
+	private final PasswordResetService passwordResetService;
 
 	public AuthService(
 			UserMapper userMapper,
@@ -38,13 +41,15 @@ public class AuthService {
 			JwtService jwtService,
 			EmailVerificationService emailVerificationService,
 			RefreshTokenService refreshTokenService,
-			LoginAttemptService loginAttemptService) {
+			LoginAttemptService loginAttemptService,
+			PasswordResetService passwordResetService) {
 		this.userMapper = userMapper;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtService = jwtService;
 		this.emailVerificationService = emailVerificationService;
 		this.refreshTokenService = refreshTokenService;
 		this.loginAttemptService = loginAttemptService;
+		this.passwordResetService = passwordResetService;
 	}
 
 	@Transactional
@@ -89,6 +94,14 @@ public class AuthService {
 		}
 		int resendCooldownSeconds = emailVerificationService.resendOtp(email);
 		return new ResendVerificationOtpResponse(resendCooldownSeconds);
+	}
+
+	public void forgotPassword(ForgotPasswordRequest request) {
+		passwordResetService.requestReset(request.email());
+	}
+
+	public void resetPassword(ResetPasswordRequest request) {
+		passwordResetService.resetPassword(request.token(), request.newPassword());
 	}
 
 	@Transactional

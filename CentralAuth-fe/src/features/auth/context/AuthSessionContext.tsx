@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PropsWithChildren } from 'react'
 import {
+  forgotPassword as requestPasswordResetApi,
   logout,
   logoutAllDevices,
   resendVerificationOtp as requestVerificationOtpResend,
+  resetPassword as resetPasswordApi,
   restoreSession,
   signin,
   signup,
@@ -93,6 +95,24 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     }
   }
 
+  async function requestPasswordReset(email: string) {
+    setLoading(true)
+    try {
+      await requestPasswordResetApi({ email })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function resetPasswordWithToken(token: string, newPassword: string) {
+    setLoading(true)
+    try {
+      await resetPasswordApi({ token, newPassword })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function signOut() {
     if (!token || !refreshToken) {
       clearSession()
@@ -150,6 +170,8 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     signupWithPassword,
     verifyEmailWithOtp,
     resendVerificationOtp,
+    requestPasswordReset,
+    resetPasswordWithToken,
     signOut,
     signOutAllDevices,
     clearSession,

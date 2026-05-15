@@ -23,6 +23,7 @@ type AuthFormCardProps = {
   loading: boolean;
   restoring: boolean;
   error: string;
+  onForgotPassword: () => void;
   onModeChange: (mode: AuthMode) => void;
   onSubmit: (values: AuthFormValues) => Promise<void>;
 };
@@ -32,6 +33,7 @@ export function AuthFormCard({
   loading,
   restoring,
   error,
+  onForgotPassword,
   onModeChange,
   onSubmit,
 }: AuthFormCardProps) {
@@ -131,6 +133,12 @@ export function AuthFormCard({
           >
             {mode === 'signup' ? t('auth.createAccount') : t('auth.signin')}
           </Button>
+
+          {mode === 'signin' ? (
+            <Button type="link" block onClick={onForgotPassword}>
+              {t('auth.forgotPassword')}
+            </Button>
+          ) : null}
         </Form>
       </Space>
     </Card>

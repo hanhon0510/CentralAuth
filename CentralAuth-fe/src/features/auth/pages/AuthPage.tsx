@@ -9,11 +9,24 @@ import { ROUTES } from '../../../shared/constants/routes'
 import { LanguageSwitcher } from '../../../shared/i18n/LanguageSwitcher'
 import { useI18n } from '../../../shared/i18n/useI18n'
 import { ApiRequestError } from '../../../shared/lib/http'
+import { ForgotPasswordCard } from '../components/ForgotPasswordCard'
+import { ResetPasswordCard } from '../components/ResetPasswordCard'
 
 export type AuthFormValues = {
   email: string
   password: string
   displayName?: string
+}
+
+type PasswordResetStep = 'auth' | 'forgotPassword' | 'resetPassword'
+
+export type ForgotPasswordValues = {
+  email: string
+}
+
+export type ResetPasswordValues = {
+  token: string
+  newPassword: string
 }
 
 type AuthPageProps = {
@@ -32,12 +45,17 @@ export function AuthPage({ mode }: AuthPageProps) {
     signupWithPassword,
     verifyEmailWithOtp,
     resendVerificationOtp,
+    requestPasswordReset,
+    resetPasswordWithToken,
   } = useAuthSession()
   const [error, setError] = useState('')
   const [verificationEmail, setVerificationEmail] = useState('')
   const [resendSucceeded, setResendSucceeded] = useState(false)
   const [resendCooldownSeconds, setResendCooldownSeconds] = useState(0)
   const [resending, setResending] = useState(false)
+  const [passwordResetStep, setPasswordResetStep] = useState<PasswordResetStep>('auth')
+  const [passwordResetMessage, setPasswordResetMessage] = useState('')
+  const [passwordResetSucceeded, setPasswordResetSucceeded] = useState(false)
 
   const routeState = location.state as { verifiedEmail?: string } | null
   const verifiedEmail = routeState?.verifiedEmail ?? ''
@@ -83,6 +101,9 @@ export function AuthPage({ mode }: AuthPageProps) {
     setVerificationEmail('')
     setResendSucceeded(false)
     setResendCooldownSeconds(0)
+    setPasswordResetStep('auth')
+    setPasswordResetMessage('')
+    setPasswordResetSucceeded(false)
     navigate(nextMode === 'signup' ? ROUTES.signup : ROUTES.signin)
   }
 
@@ -125,7 +146,42 @@ export function AuthPage({ mode }: AuthPageProps) {
     setVerificationEmail('')
     setResendSucceeded(false)
     setResendCooldownSeconds(0)
+    setPasswordResetStep('auth')
+    setPasswordResetMessage('')
+    setPasswordResetSucceeded(false)
     navigate(ROUTES.signin)
+  }
+
+  function handleForgotPasswordClick() {
+    setError('')
+    setPasswordResetMessage('')
+    setPasswordResetSucceeded(false)
+    setPasswordResetStep('forgotPassword')
+  }
+
+  async function handleForgotPassword(values: ForgotPasswordValues) {
+    setError('')
+    setPasswordResetMessage('')
+    try {
+      await requestPasswordReset(values.email)
+      setPasswordResetMessage(t('auth.resetInstructionsSent'))
+      setPasswordResetStep('resetPassword')
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : t('common.requestFailed'))
+    }
+  }
+
+  async function handleResetPassword(values: ResetPasswordValues) {
+    setError('')
+    try {
+      await resetPasswordWithToken(values.token, values.newPassword)
+      setPasswordResetStep('auth')
+      setPasswordResetMessage('')
+      setPasswordResetSucceeded(true)
+      navigate(ROUTES.signin, { replace: true })
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : t('common.requestFailed'))
+    }
   }
 
   return (
@@ -145,7 +201,29 @@ export function AuthPage({ mode }: AuthPageProps) {
                   message={t('auth.emailVerifiedSignin')}
                 />
               ) : null}
-              {verificationEmail ? (
+              {passwordResetSucceeded ? (
+                <Alert
+                  type="success"
+                  showIcon
+                  message={t('auth.passwordResetSucceeded')}
+                />
+              ) : null}
+              {passwordResetStep === 'forgotPassword' ? (
+                <ForgotPasswordCard
+                  loading={loading}
+                  error={error}
+                  onBack={handleBackToSignin}
+                  onSubmit={handleForgotPassword}
+                />
+              ) : passwordResetStep === 'resetPassword' ? (
+                <ResetPasswordCard
+                  loading={loading}
+                  error={error}
+                  message={passwordResetMessage}
+                  onBack={handleBackToSignin}
+                  onSubmit={handleResetPassword}
+                />
+              ) : verificationEmail ? (
                 <VerifyEmailCard
                   email={verificationEmail}
                   verifying={loading && !resending}
@@ -163,6 +241,7 @@ export function AuthPage({ mode }: AuthPageProps) {
                   loading={loading}
                   restoring={restoring}
                   error={error}
+                  onForgotPassword={handleForgotPasswordClick}
                   onModeChange={handleModeChange}
                   onSubmit={handleSubmit}
                 />

@@ -3,9 +3,11 @@ package com.centralauth.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.blankOrNullString;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -140,6 +142,23 @@ class AuthControllerIntegrationTests {
 
 	private String refreshTokenFrom(MvcResult result) throws Exception {
 		return stringFieldFrom(result, "refreshToken");
+	}
+
+	private String userIdFor(String email) {
+		return jdbcTemplate.queryForObject("select cast(id as varchar) from users where email = ?", String.class, email);
+	}
+
+	private String capturePasswordResetToken(String email) {
+		ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
+		verify(valueOperations).set(
+				keyCaptor.capture(),
+				eq(userIdFor(email)),
+				eq(Duration.ofMinutes(15)));
+		String key = keyCaptor.getValue();
+		assertThat(key).startsWith("password-reset:");
+		String token = key.substring("password-reset:".length());
+		assertThat(token).matches("[A-Za-z0-9_-]{43}");
+		return token;
 	}
 
 	private String stringFieldFrom(MvcResult result, String fieldName) throws Exception {
@@ -377,6 +396,93 @@ class AuthControllerIntegrationTests {
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.message")
 						.value("Vui lòng chờ 42 giây trước khi yêu cầu mã OTP xác minh mới"));
+	}
+
+	@Test
+	void forgotPasswordStoresResetTokenForExistingEnabledUser() throws Exception {
+		signupAndVerify("forgot-existing@example.com");
+
+		mockMvc().perform(post("/api/v1/auth/forgot-password")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"forgot-existing@example.com"}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message")
+						.value("If the email is registered, password reset instructions have been sent"));
+
+		capturePasswordResetToken("forgot-existing@example.com");
+	}
+
+	@Test
+	void forgotPasswordDoesNotRevealUnknownEmail() throws Exception {
+		mockMvc().perform(post("/api/v1/auth/forgot-password")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"missing-reset@example.com"}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message")
+						.value("If the email is registered, password reset instructions have been sent"));
+
+		verify(valueOperations, never()).set(
+				matches("password-reset:.*"),
+				anyString(),
+				eq(Duration.ofMinutes(15)));
+	}
+
+	@Test
+	void resetPasswordUpdatesPasswordAndRevokesActiveRefreshTokens() throws Exception {
+		signupAndVerify("reset-valid@example.com");
+		signin("reset-valid@example.com", "Password123!");
+		signin("reset-valid@example.com", "Password123!");
+		assertThat(activeRefreshTokenCount("reset-valid@example.com")).isGreaterThanOrEqualTo(2);
+
+		mockMvc().perform(post("/api/v1/auth/forgot-password")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"reset-valid@example.com"}
+								"""))
+				.andExpect(status().isOk());
+		String token = capturePasswordResetToken("reset-valid@example.com");
+		when(valueOperations.getAndDelete("password-reset:" + token)).thenReturn(userIdFor("reset-valid@example.com"));
+
+		mockMvc().perform(post("/api/v1/auth/reset-password")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"token":"%s","newPassword":"NewPassword123!"}
+								""".formatted(token)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Password reset successful"));
+
+		assertThat(activeRefreshTokenCount("reset-valid@example.com")).isZero();
+
+		signinAttempt("reset-valid@example.com", "Password123!", "203.0.113.60")
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Invalid email or password"));
+
+		signinAttempt("reset-valid@example.com", "NewPassword123!", "203.0.113.61")
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Signin successful"));
+	}
+
+	@Test
+	void resetPasswordRejectsInvalidToken() throws Exception {
+		when(valueOperations.getAndDelete("password-reset:not-a-reset-token")).thenReturn(null);
+
+		mockMvc().perform(post("/api/v1/auth/reset-password")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"token":"not-a-reset-token","newPassword":"NewPassword123!"}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Invalid or expired password reset token"));
 	}
 
 	@Test

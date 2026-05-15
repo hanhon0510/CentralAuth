@@ -64,6 +64,8 @@ centralauth:
   email-verification:
     otp-ttl: ${CENTRALAUTH_EMAIL_VERIFICATION_OTP_TTL:10m}
     resend-cooldown: ${CENTRALAUTH_EMAIL_VERIFICATION_RESEND_COOLDOWN:60s}
+  password-reset:
+    token-ttl: ${CENTRALAUTH_PASSWORD_RESET_TOKEN_TTL:15m}
   jwt:
     secret: ${CENTRALAUTH_JWT_SECRET:cbdhhcbdhbcwhbhdcbdhcbhdbchdcbhdcccc}
     issuer: ${CENTRALAUTH_JWT_ISSUER:central-auth}

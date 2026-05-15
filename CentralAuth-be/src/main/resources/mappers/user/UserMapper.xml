@@ -47,4 +47,12 @@
 		    updated_at = current_timestamp
 		where lower(email) = lower(#{email})
 	</update>
+
+	<update id="updatePasswordHash">
+		update users
+		set password_hash = #{passwordHash},
+		    updated_at = current_timestamp
+		where id = cast(#{id} as uuid)
+		  and enabled = true
+	</update>
 </mapper>

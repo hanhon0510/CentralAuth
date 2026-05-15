@@ -19,6 +19,15 @@ type ResendVerificationOtpPayload = {
   email: string
 }
 
+type ForgotPasswordPayload = {
+  email: string
+}
+
+type ResetPasswordPayload = {
+  token: string
+  newPassword: string
+}
+
 export type ResendVerificationOtpResponse = {
   resendCooldownSeconds: number
 }
@@ -47,6 +56,22 @@ export function verifyEmail(payload: VerifyEmailPayload) {
 
 export function resendVerificationOtp(payload: ResendVerificationOtpPayload) {
   return apiRequest<ResendVerificationOtpResponse>('/api/v1/auth/resend-verification-otp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function forgotPassword(payload: ForgotPasswordPayload) {
+  return apiRequest<void>('/api/v1/auth/forgot-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function resetPassword(payload: ResetPasswordPayload) {
+  return apiRequest<void>('/api/v1/auth/reset-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

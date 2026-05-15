@@ -12,6 +12,7 @@ import com.centralauth.auth.EmailVerificationNotPendingException;
 import com.centralauth.auth.EmailVerificationOtpResendThrottledException;
 import com.centralauth.auth.InvalidEmailVerificationOtpException;
 import com.centralauth.auth.InvalidCredentialsException;
+import com.centralauth.auth.InvalidPasswordResetTokenException;
 import com.centralauth.auth.LoginRateLimitExceededException;
 import com.centralauth.auth.LoginTemporarilyLockedException;
 
@@ -41,6 +42,11 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler(InvalidEmailVerificationOtpException.class)
 	public ResponseEntity<ApiResponse<Void>> handleInvalidEmailVerificationOtp(InvalidEmailVerificationOtpException ex) {
+		return error(messages.get(ex), HttpStatus.BAD_REQUEST);
+	}
+
+	@ExceptionHandler(InvalidPasswordResetTokenException.class)
+	public ResponseEntity<ApiResponse<Void>> handleInvalidPasswordResetToken(InvalidPasswordResetTokenException ex) {
 		return error(messages.get(ex), HttpStatus.BAD_REQUEST);
 	}
 

@@ -11,9 +11,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.centralauth.auth.dto.AuthResponse;
+import com.centralauth.auth.dto.ForgotPasswordRequest;
 import com.centralauth.auth.dto.LogoutRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpResponse;
+import com.centralauth.auth.dto.ResetPasswordRequest;
 import com.centralauth.auth.dto.SigninRequest;
 import com.centralauth.auth.dto.SignupRequest;
 import com.centralauth.auth.dto.UserResponse;
@@ -60,6 +62,18 @@ public class AuthController {
 	public ApiResponse<ResendVerificationOtpResponse> resendVerificationOtp(
 			@Valid @RequestBody ResendVerificationOtpRequest request) {
 		return ApiResponse.success(messages.get("auth.verificationOtp.resent"), authService.resendVerificationOtp(request));
+	}
+
+	@PostMapping("/forgot-password")
+	public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+		authService.forgotPassword(request);
+		return ApiResponse.success(messages.get("auth.passwordReset.requested"), null);
+	}
+
+	@PostMapping("/reset-password")
+	public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+		authService.resetPassword(request);
+		return ApiResponse.success(messages.get("auth.passwordReset.success"), null);
 	}
 
 	@PostMapping("/logout")
