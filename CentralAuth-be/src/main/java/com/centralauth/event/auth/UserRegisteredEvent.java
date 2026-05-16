@@ -1,4 +1,4 @@
-package com.centralauth.event;
+package com.centralauth.event.auth;
 
 import java.time.Instant;
 

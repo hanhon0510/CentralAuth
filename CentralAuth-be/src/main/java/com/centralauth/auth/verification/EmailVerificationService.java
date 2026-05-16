@@ -1,4 +1,4 @@
-package com.centralauth.auth;
+package com.centralauth.auth.verification;
 
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -9,6 +9,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+
+import com.centralauth.auth.exception.EmailVerificationOtpResendThrottledException;
+import com.centralauth.auth.exception.InvalidEmailVerificationOtpException;
 
 @Service
 public class EmailVerificationService {

@@ -20,8 +20,21 @@ import com.centralauth.auth.dto.SigninRequest;
 import com.centralauth.auth.dto.SignupRequest;
 import com.centralauth.auth.dto.UserResponse;
 import com.centralauth.auth.dto.VerifyEmailRequest;
-import com.centralauth.event.UserRegisteredEvent;
-import com.centralauth.event.UserVerifiedEvent;
+import com.centralauth.auth.exception.DuplicateEmailException;
+import com.centralauth.auth.exception.EmailVerificationNotPendingException;
+import com.centralauth.auth.exception.InvalidCredentialsException;
+import com.centralauth.auth.exception.InvalidEmailVerificationOtpException;
+import com.centralauth.auth.login.LoginAttemptService;
+import com.centralauth.auth.login.LoginRateLimitExceededException;
+import com.centralauth.auth.login.LoginTemporarilyLockedException;
+import com.centralauth.auth.password.PasswordResetService;
+import com.centralauth.auth.token.RefreshTokenService;
+import com.centralauth.auth.verification.EmailVerificationService;
+import com.centralauth.event.auth.LoginFailedEvent;
+import com.centralauth.event.auth.LoginSucceededEvent;
+import com.centralauth.event.auth.UserRegisteredEvent;
+import com.centralauth.event.auth.UserLoggedOutEvent;
+import com.centralauth.event.auth.UserVerifiedEvent;
 import com.centralauth.security.JwtService;
 import com.centralauth.user.User;
 import com.centralauth.user.UserMapper;
@@ -126,8 +139,19 @@ public class AuthService {
 	@Transactional
 	public AuthResponse signin(SigninRequest request, String clientIp) {
 		String email = normalizeEmail(request.email());
-		loginAttemptService.recordAttempt(email, clientIp);
-		loginAttemptService.requireLoginAllowed(email, clientIp);
+		try {
+			loginAttemptService.recordAttempt(email, clientIp);
+			loginAttemptService.requireLoginAllowed(email, clientIp);
+		}
+		catch (LoginRateLimitExceededException ex) {
+			publishLoginFailed(email, clientIp, "RATE_LIMITED");
+			throw ex;
+		}
+		catch (LoginTemporarilyLockedException ex) {
+			publishLoginFailed(email, clientIp, "TEMPORARILY_LOCKED");
+			throw ex;
+		}
+
 		User user = userMapper.findByEmail(email)
 				.filter(User::enabled)
 				.filter(User::emailVerified)
@@ -135,19 +159,30 @@ public class AuthService {
 				.orElse(null);
 		if (user == null) {
 			loginAttemptService.recordFailure(email, clientIp);
+			publishLoginFailed(email, clientIp, "INVALID_CREDENTIALS");
 			throw new InvalidCredentialsException();
 		}
 
 		loginAttemptService.recordSuccess(email, clientIp);
-		return toAuthResponse(user);
+		AuthResponse response = toAuthResponse(user);
+		eventPublisher.publishEvent(new LoginSucceededEvent(
+				user.id(),
+				user.email(),
+				clientIp,
+				Instant.now()));
+		return response;
 	}
 
+	@Transactional
 	public void logout(String userId, LogoutRequest request) {
 		refreshTokenService.revokeRefreshToken(userId, request.refreshToken());
+		eventPublisher.publishEvent(new UserLoggedOutEvent(userId, false, Instant.now()));
 	}
 
+	@Transactional
 	public void logoutAllDevices(String userId) {
 		refreshTokenService.revokeAllActiveRefreshTokens(userId);
+		eventPublisher.publishEvent(new UserLoggedOutEvent(userId, true, Instant.now()));
 	}
 
 	public UserResponse currentUser(String userId) {
@@ -162,6 +197,10 @@ public class AuthService {
 				jwtService.createToken(user),
 				refreshTokenService.issueRefreshToken(user.id()),
 				UserResponse.from(user));
+	}
+
+	private void publishLoginFailed(String email, String clientIp, String reason) {
+		eventPublisher.publishEvent(new LoginFailedEvent(email, clientIp, reason, Instant.now()));
 	}
 
 	private String normalizeEmail(String email) {

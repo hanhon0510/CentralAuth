@@ -39,7 +39,7 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: com.centralauth.event
+        spring.json.trusted.packages: com.centralauth.event.auth
 
 mybatis:
   mapper-locations: classpath*:mappers/**/*.xml

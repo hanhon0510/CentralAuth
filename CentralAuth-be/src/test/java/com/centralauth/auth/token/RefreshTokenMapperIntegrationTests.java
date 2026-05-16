@@ -1,4 +1,4 @@
-package com.centralauth.auth;
+package com.centralauth.auth.token;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

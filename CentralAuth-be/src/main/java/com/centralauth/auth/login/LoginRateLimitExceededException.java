@@ -1,4 +1,4 @@
-package com.centralauth.auth;
+package com.centralauth.auth.login;
 
 import com.centralauth.common.LocalizedApiException;
 

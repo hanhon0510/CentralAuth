@@ -167,6 +167,18 @@ class AuthControllerIntegrationTests {
 		return token;
 	}
 
+	private Object captureKafkaEvent(String topic, String key) {
+		ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+		verify(kafkaTemplate).send(eq(topic), eq(key), eventCaptor.capture());
+		return eventCaptor.getValue();
+	}
+
+	private void assertOccurredAt(Object event) {
+		assertThat(event)
+				.extracting("occurredAt")
+				.isInstanceOf(Instant.class);
+	}
+
 	private String stringFieldFrom(MvcResult result, String fieldName) throws Exception {
 		String response = result.getResponse().getContentAsString();
 		String marker = "\"" + fieldName + "\":\"";
@@ -262,15 +274,12 @@ class AuthControllerIntegrationTests {
 				.andExpect(status().isOk());
 
 		String userId = userIdFor(email);
-		ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-		verify(kafkaTemplate).send(eq("auth.user.registered"), eq(userId), eventCaptor.capture());
-		assertThat(eventCaptor.getValue())
+		Object event = captureKafkaEvent("auth.user.registered", userId);
+		assertThat(event)
 				.hasFieldOrPropertyWithValue("userId", userId)
 				.hasFieldOrPropertyWithValue("email", email)
 				.hasFieldOrPropertyWithValue("displayName", "Registered Event");
-		assertThat(eventCaptor.getValue())
-				.extracting("occurredAt")
-				.isInstanceOf(Instant.class);
+		assertOccurredAt(event);
 	}
 
 	@Test
@@ -336,14 +345,11 @@ class AuthControllerIntegrationTests {
 
 		verifyEmail(email, otp);
 
-		ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-		verify(kafkaTemplate).send(eq("auth.user.verified"), eq(userId), eventCaptor.capture());
-		assertThat(eventCaptor.getValue())
+		Object event = captureKafkaEvent("auth.user.verified", userId);
+		assertThat(event)
 				.hasFieldOrPropertyWithValue("userId", userId)
 				.hasFieldOrPropertyWithValue("email", email);
-		assertThat(eventCaptor.getValue())
-				.extracting("occurredAt")
-				.isInstanceOf(Instant.class);
+		assertOccurredAt(event);
 	}
 
 	@Test
@@ -471,6 +477,27 @@ class AuthControllerIntegrationTests {
 	}
 
 	@Test
+	void forgotPasswordPublishesPasswordResetRequestedEventForExistingEnabledUser() throws Exception {
+		String email = "reset-requested-event@example.com";
+		signupAndVerify(email);
+		String userId = userIdFor(email);
+		clearInvocations(kafkaTemplate);
+
+		mockMvc().perform(post("/api/v1/auth/forgot-password")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"%s"}
+								""".formatted(email)))
+				.andExpect(status().isOk());
+
+		Object event = captureKafkaEvent("auth.user.password.reset.requested", userId);
+		assertThat(event)
+				.hasFieldOrPropertyWithValue("userId", userId)
+				.hasFieldOrPropertyWithValue("email", email);
+		assertOccurredAt(event);
+	}
+
+	@Test
 	void forgotPasswordDoesNotRevealUnknownEmail() throws Exception {
 		mockMvc().perform(post("/api/v1/auth/forgot-password")
 						.contentType(MediaType.APPLICATION_JSON)
@@ -524,6 +551,35 @@ class AuthControllerIntegrationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.message").value("Signin successful"));
+	}
+
+	@Test
+	void resetPasswordPublishesPasswordChangedEvent() throws Exception {
+		String email = "password-changed-event@example.com";
+		signupAndVerify(email);
+		mockMvc().perform(post("/api/v1/auth/forgot-password")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"%s"}
+								""".formatted(email)))
+				.andExpect(status().isOk());
+		String userId = userIdFor(email);
+		String token = capturePasswordResetToken(email);
+		when(valueOperations.getAndDelete("password-reset:" + token)).thenReturn(userId);
+		clearInvocations(kafkaTemplate);
+
+		mockMvc().perform(post("/api/v1/auth/reset-password")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"token":"%s","newPassword":"NewPassword123!"}
+								""".formatted(token)))
+				.andExpect(status().isOk());
+
+		Object event = captureKafkaEvent("auth.user.password.changed", userId);
+		assertThat(event)
+				.hasFieldOrPropertyWithValue("userId", userId)
+				.hasFieldOrPropertyWithValue("email", email);
+		assertOccurredAt(event);
 	}
 
 	@Test
@@ -596,6 +652,24 @@ class AuthControllerIntegrationTests {
 	}
 
 	@Test
+	void signinPublishesLoginSucceededEvent() throws Exception {
+		String email = "login-success-event@example.com";
+		signupAndVerify(email);
+		String userId = userIdFor(email);
+		clearInvocations(kafkaTemplate);
+
+		signinAttempt(email, "Password123!", "203.0.113.70")
+				.andExpect(status().isOk());
+
+		Object event = captureKafkaEvent("auth.user.login.succeeded", userId);
+		assertThat(event)
+				.hasFieldOrPropertyWithValue("userId", userId)
+				.hasFieldOrPropertyWithValue("email", email)
+				.hasFieldOrPropertyWithValue("clientIp", "203.0.113.70");
+		assertOccurredAt(event);
+	}
+
+	@Test
 	void signinIssuesRefreshTokenAndStoresOnlyItsHash() throws Exception {
 		signupAndVerify("signin-refresh@example.com");
 
@@ -649,6 +723,31 @@ class AuthControllerIntegrationTests {
 	}
 
 	@Test
+	void logoutPublishesLogoutEvent() throws Exception {
+		String email = "logout-event@example.com";
+		signupAndVerify(email);
+		MvcResult signin = signin(email, "Password123!");
+		String accessToken = tokenFrom(signin);
+		String refreshToken = refreshTokenFrom(signin);
+		String userId = userIdFor(email);
+		clearInvocations(kafkaTemplate);
+
+		mockMvc().perform(post("/api/v1/auth/logout")
+						.header("Authorization", "Bearer " + accessToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"refreshToken":"%s"}
+								""".formatted(refreshToken)))
+				.andExpect(status().isOk());
+
+		Object event = captureKafkaEvent("auth.user.logout", userId);
+		assertThat(event)
+				.hasFieldOrPropertyWithValue("userId", userId)
+				.hasFieldOrPropertyWithValue("allDevices", false);
+		assertOccurredAt(event);
+	}
+
+	@Test
 	void logoutAllDevicesRevokesOnlyAuthenticatedUsersActiveRefreshTokens() throws Exception {
 		signupAndVerify("logout-all@example.com");
 		signupAndVerify("logout-all-other@example.com");
@@ -685,6 +784,24 @@ class AuthControllerIntegrationTests {
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.message").value("Invalid email or password"));
+	}
+
+	@Test
+	void signinPublishesLoginFailedEventForInvalidCredentials() throws Exception {
+		String email = "login-failure-event@example.com";
+		signupAndVerify(email);
+		clearInvocations(kafkaTemplate);
+
+		signinAttempt(email, "wrong-password", "203.0.113.71")
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.message").value("Invalid email or password"));
+
+		Object event = captureKafkaEvent("auth.user.login.failed", email);
+		assertThat(event)
+				.hasFieldOrPropertyWithValue("email", email)
+				.hasFieldOrPropertyWithValue("clientIp", "203.0.113.71")
+				.hasFieldOrPropertyWithValue("reason", "INVALID_CREDENTIALS");
+		assertOccurredAt(event);
 	}
 
 	@Test

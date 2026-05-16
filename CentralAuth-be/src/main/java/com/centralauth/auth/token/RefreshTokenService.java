@@ -1,4 +1,4 @@
-package com.centralauth.auth;
+package com.centralauth.auth.token;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

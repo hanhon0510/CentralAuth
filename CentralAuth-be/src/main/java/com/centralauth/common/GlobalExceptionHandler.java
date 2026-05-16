@@ -7,14 +7,14 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import com.centralauth.auth.DuplicateEmailException;
-import com.centralauth.auth.EmailVerificationNotPendingException;
-import com.centralauth.auth.EmailVerificationOtpResendThrottledException;
-import com.centralauth.auth.InvalidEmailVerificationOtpException;
-import com.centralauth.auth.InvalidCredentialsException;
-import com.centralauth.auth.InvalidPasswordResetTokenException;
-import com.centralauth.auth.LoginRateLimitExceededException;
-import com.centralauth.auth.LoginTemporarilyLockedException;
+import com.centralauth.auth.exception.DuplicateEmailException;
+import com.centralauth.auth.exception.EmailVerificationNotPendingException;
+import com.centralauth.auth.exception.EmailVerificationOtpResendThrottledException;
+import com.centralauth.auth.exception.InvalidEmailVerificationOtpException;
+import com.centralauth.auth.exception.InvalidCredentialsException;
+import com.centralauth.auth.exception.InvalidPasswordResetTokenException;
+import com.centralauth.auth.login.LoginRateLimitExceededException;
+import com.centralauth.auth.login.LoginTemporarilyLockedException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {

@@ -2,9 +2,9 @@
 <!DOCTYPE mapper
 		PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 		"https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.centralauth.auth.RefreshTokenMapper">
+<mapper namespace="com.centralauth.auth.token.RefreshTokenMapper">
 
-	<select id="findByTokenHash" resultType="com.centralauth.auth.RefreshToken">
+	<select id="findByTokenHash" resultType="com.centralauth.auth.token.RefreshToken">
 		select cast(id as varchar) as id,
 		       cast(user_id as varchar) as user_id,
 		       token_hash,
@@ -18,7 +18,7 @@
 		where token_hash = #{tokenHash}
 	</select>
 
-	<select id="findByUserId" resultType="com.centralauth.auth.RefreshToken">
+	<select id="findByUserId" resultType="com.centralauth.auth.token.RefreshToken">
 		select cast(id as varchar) as id,
 		       cast(user_id as varchar) as user_id,
 		       token_hash,
@@ -33,7 +33,7 @@
 		order by issued_at desc
 	</select>
 
-	<insert id="insert" parameterType="com.centralauth.auth.RefreshToken">
+	<insert id="insert" parameterType="com.centralauth.auth.token.RefreshToken">
 		insert into refresh_tokens (id, user_id, token_hash, issued_at, expires_at, revoked, revoked_at)
 		values (
 		    cast(#{id} as uuid),

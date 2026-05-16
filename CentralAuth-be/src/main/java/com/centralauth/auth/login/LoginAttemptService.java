@@ -1,4 +1,4 @@
-package com.centralauth.auth;
+package com.centralauth.auth.login;
 
 import java.time.Duration;
 import java.util.List;
