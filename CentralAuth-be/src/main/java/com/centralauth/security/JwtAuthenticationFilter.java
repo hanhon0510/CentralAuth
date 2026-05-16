@@ -1,7 +1,6 @@
 package com.centralauth.security;
 
 import java.io.IOException;
-import java.util.List;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -45,6 +44,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		return new UsernamePasswordAuthenticationToken(
 				principal.userId(),
 				null,
-				List.of(new SimpleGrantedAuthority("ROLE_USER")));
+				principal.roles().stream()
+						.map(SimpleGrantedAuthority::new)
+						.toList());
 	}
 }

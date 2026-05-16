@@ -40,6 +40,13 @@
 		values (cast(#{userId} as uuid), #{role})
 	</insert>
 
+	<select id="findRolesByUserId" resultType="string">
+		select role
+		from user_roles
+		where user_id = cast(#{userId} as uuid)
+		order by role
+	</select>
+
 	<update id="verifyEmail">
 		update users
 		set enabled = true,

@@ -1,5 +1,6 @@
 package com.centralauth.user;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.apache.ibatis.annotations.Mapper;
@@ -15,6 +16,8 @@ public interface UserMapper {
 	void insert(User user);
 
 	void insertRole(@Param("userId") String userId, @Param("role") String role);
+
+	List<String> findRolesByUserId(@Param("userId") String userId);
 
 	int verifyEmail(@Param("email") String email);
 

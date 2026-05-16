@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+		PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.centralauth.audit.AuditLogMapper">
+
+	<insert id="insert" parameterType="com.centralauth.audit.AuditLog">
+		insert into audit_logs (
+		    id,
+		    event_type,
+		    user_id,
+		    email,
+		    client_ip,
+		    reason,
+		    occurred_at,
+		    consumed_at,
+		    kafka_topic,
+		    kafka_key,
+		    payload_json
+		)
+		values (
+		    cast(#{id} as uuid),
+		    #{eventType},
+		    cast(#{userId} as uuid),
+		    #{email},
+		    #{clientIp},
+		    #{reason},
+		    #{occurredAt},
+		    #{consumedAt},
+		    #{kafkaTopic},
+		    #{kafkaKey},
+		    #{payloadJson}
+		)
+	</insert>
+
+	<select id="findRecent" resultType="com.centralauth.audit.AuditLog">
+		select cast(id as varchar) as id,
+		       event_type,
+		       cast(user_id as varchar) as user_id,
+		       email,
+		       client_ip,
+		       reason,
+		       occurred_at,
+		       consumed_at,
+		       kafka_topic,
+		       kafka_key,
+		       payload_json
+		from audit_logs
+		<where>
+			<if test="eventType != null">
+				event_type = #{eventType}
+			</if>
+			<if test="userId != null">
+				and user_id = cast(#{userId} as uuid)
+			</if>
+			<if test="email != null">
+				and lower(email) = lower(#{email})
+			</if>
+		</where>
+		order by occurred_at desc, consumed_at desc
+		limit #{limit}
+	</select>
+</mapper>

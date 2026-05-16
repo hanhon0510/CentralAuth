@@ -3,9 +3,10 @@ import { SessionCard } from '../../auth/components/SessionCard';
 import { useAuthSession } from '../../auth/context/useAuthSession';
 import { LanguageSwitcher } from '../../../shared/i18n/LanguageSwitcher';
 import { useI18n } from '../../../shared/i18n/useI18n';
+import { AuditLogPanel } from '../../audit/components/AuditLogPanel';
 
 export function DashboardPage() {
-  const { user, tokenPreview, loading, signOut, signOutAllDevices } = useAuthSession();
+  const { isAdmin, roles, token, user, tokenPreview, loading, signOut, signOutAllDevices } = useAuthSession();
   const { t } = useI18n();
 
   if (!user) return null;
@@ -14,7 +15,14 @@ export function DashboardPage() {
     <Layout className="app-shell">
       <Layout.Content className="content-shell">
         <Row justify="center">
-          <Col xs={24} sm={22} md={16} lg={12} xl={10} xxl={8}>
+          <Col
+            xs={24}
+            sm={22}
+            md={isAdmin ? 22 : 16}
+            lg={isAdmin ? 20 : 12}
+            xl={isAdmin ? 18 : 10}
+            xxl={isAdmin ? 16 : 8}
+          >
             <Space
               direction="vertical"
               size="middle"
@@ -25,12 +33,14 @@ export function DashboardPage() {
                 <LanguageSwitcher />
               </Space>
               <SessionCard
+                roles={roles}
                 user={user}
                 tokenPreview={tokenPreview}
                 loading={loading}
                 onSignOut={signOut}
                 onSignOutAllDevices={signOutAllDevices}
               />
+              {isAdmin ? <AuditLogPanel token={token} /> : null}
             </Space>
           </Col>
         </Row>

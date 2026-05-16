@@ -2,7 +2,9 @@ import { createContext } from 'react'
 import type { User } from '../types/auth'
 
 export type AuthSessionContextValue = {
+  isAdmin: boolean
   loading: boolean
+  roles: string[]
   restoring: boolean
   token: string
   tokenPreview: string

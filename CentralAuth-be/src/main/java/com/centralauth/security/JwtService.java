@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -40,12 +41,17 @@ public class JwtService {
 	}
 
 	public String createToken(User user) {
+		return createToken(user, List.of("ROLE_USER"));
+	}
+
+	public String createToken(User user, List<String> roles) {
 		Instant now = Instant.now();
 		Map<String, Object> header = Map.of("alg", "HS256", "typ", "JWT");
 		Map<String, Object> claims = new LinkedHashMap<>();
 		claims.put("iss", issuer);
 		claims.put("sub", user.id().toString());
 		claims.put("email", user.email());
+		claims.put("roles", roles);
 		claims.put("iat", now.getEpochSecond());
 		claims.put("exp", now.plusSeconds(expiresInSeconds).getEpochSecond());
 
@@ -79,7 +85,7 @@ public class JwtService {
 			}
 			String userId = (String) claims.get("sub");
 			String email = (String) claims.get("email");
-			return Optional.of(new JwtPrincipal(userId, email));
+			return Optional.of(new JwtPrincipal(userId, email, rolesClaim(claims)));
 		}
 		catch (RuntimeException | java.io.IOException ex) {
 			return Optional.empty();
@@ -112,6 +118,19 @@ public class JwtService {
 			return number.longValue();
 		}
 		throw new IllegalArgumentException("Missing numeric claim " + name);
+	}
+
+	private List<String> rolesClaim(Map<String, Object> claims) {
+		Object value = claims.get("roles");
+		if (value == null) {
+			return List.of();
+		}
+		List<String> roles = objectMapper.convertValue(value, new TypeReference<>() {
+		});
+		if (roles.stream().allMatch(String.class::isInstance)) {
+			return roles;
+		}
+		throw new IllegalArgumentException("Invalid roles claim");
 	}
 
 	private boolean constantTimeEquals(String expected, String actual) {

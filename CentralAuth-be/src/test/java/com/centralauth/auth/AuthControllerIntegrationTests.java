@@ -44,6 +44,9 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import com.centralauth.security.JwtPrincipal;
+import com.centralauth.security.JwtService;
+
 @SpringBootTest
 class AuthControllerIntegrationTests {
 
@@ -57,6 +60,7 @@ class AuthControllerIntegrationTests {
 		registry.add("spring.flyway.locations", () -> "classpath:db/migration");
 		registry.add("spring.data.redis.host", () -> "localhost");
 		registry.add("spring.kafka.bootstrap-servers", () -> "localhost:9092");
+		registry.add("centralauth.kafka.audit.enabled", () -> "false");
 		registry.add("centralauth.jwt.secret", () -> "test-secret-with-at-least-32-characters");
 	}
 
@@ -65,6 +69,9 @@ class AuthControllerIntegrationTests {
 
 	@Autowired
 	JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	JwtService jwtService;
 
 	@MockitoBean
 	StringRedisTemplate redisTemplate;
@@ -649,6 +656,21 @@ class AuthControllerIntegrationTests {
 				.andExpect(jsonPath("$.message").value("Signin successful"))
 				.andExpect(jsonPath("$.data.token", not(blankOrNullString())))
 				.andExpect(jsonPath("$.data.user.email").value("signin@example.com"));
+	}
+
+	@Test
+	void signinTokenIncludesRolesFromDatabase() throws Exception {
+		String email = "role-token@example.com";
+		signupAndVerify(email);
+		jdbcTemplate.update(
+				"insert into user_roles (user_id, role) values (cast(? as uuid), ?)",
+				userIdFor(email),
+				"ROLE_ADMIN");
+
+		MvcResult signin = signin(email, "Password123!");
+
+		JwtPrincipal principal = jwtService.validate(tokenFrom(signin)).orElseThrow();
+		assertThat(principal.roles()).containsExactlyInAnyOrder("ROLE_USER", "ROLE_ADMIN");
 	}
 
 	@Test

@@ -1,4 +1,6 @@
 package com.centralauth.security;
 
-public record JwtPrincipal(String userId, String email) {
+import java.util.List;
+
+public record JwtPrincipal(String userId, String email, List<String> roles) {
 }

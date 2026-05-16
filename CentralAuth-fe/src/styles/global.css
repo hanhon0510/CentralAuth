@@ -32,3 +32,55 @@ body {
   color: #637083;
   font-weight: 700;
 }
+
+.audit-filter-row {
+  width: 100%;
+}
+
+.audit-filter-item {
+  min-width: 180px;
+}
+
+.audit-filter-item-wide {
+  min-width: 260px;
+}
+
+.audit-filter-item-small {
+  width: 96px;
+}
+
+.audit-filter-action {
+  margin-bottom: 24px;
+}
+
+.audit-payload {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid #d9dee8;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #253044;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 640px) {
+  .audit-filter-item,
+  .audit-filter-item-wide,
+  .audit-filter-item-small {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .audit-filter-action {
+    width: 100%;
+  }
+
+  .audit-filter-action .ant-btn {
+    width: 100%;
+  }
+}

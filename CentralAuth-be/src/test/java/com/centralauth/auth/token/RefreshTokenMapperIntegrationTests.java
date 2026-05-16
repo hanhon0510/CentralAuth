@@ -26,6 +26,7 @@ class RefreshTokenMapperIntegrationTests {
 		registry.add("spring.flyway.locations", () -> "classpath:db/migration");
 		registry.add("spring.data.redis.host", () -> "localhost");
 		registry.add("spring.kafka.bootstrap-servers", () -> "localhost:9092");
+		registry.add("centralauth.kafka.audit.enabled", () -> "false");
 		registry.add("centralauth.jwt.secret", () -> "test-secret-with-at-least-32-characters");
 	}
 

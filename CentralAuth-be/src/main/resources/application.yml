@@ -61,6 +61,8 @@ server:
   port: ${PORT:8080}
 
 centralauth:
+  admin:
+    bootstrap-emails: ${CENTRALAUTH_ADMIN_BOOTSTRAP_EMAILS:}
   email-verification:
     otp-ttl: ${CENTRALAUTH_EMAIL_VERIFICATION_OTP_TTL:10m}
     resend-cooldown: ${CENTRALAUTH_EMAIL_VERIFICATION_RESEND_COOLDOWN:60s}
@@ -80,6 +82,8 @@ centralauth:
       max-attempts: ${CENTRALAUTH_LOGIN_RATE_LIMIT_MAX_ATTEMPTS:10}
       window: ${CENTRALAUTH_LOGIN_RATE_LIMIT_WINDOW:1m}
   kafka:
+    audit:
+      enabled: ${CENTRALAUTH_KAFKA_AUDIT_ENABLED:true}
     topics:
       user-registered: auth.user.registered
       user-verified: auth.user.verified

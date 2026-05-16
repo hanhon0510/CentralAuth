@@ -4,6 +4,7 @@ import type { User } from '../types/auth'
 import { useI18n } from '../../../shared/i18n/useI18n'
 
 type SessionCardProps = {
+  roles: string[]
   tokenPreview: string
   user: User
   loading: boolean
@@ -11,7 +12,7 @@ type SessionCardProps = {
   onSignOutAllDevices: () => Promise<void>
 }
 
-export function SessionCard({ tokenPreview, user, loading, onSignOut, onSignOutAllDevices }: SessionCardProps) {
+export function SessionCard({ roles, tokenPreview, user, loading, onSignOut, onSignOutAllDevices }: SessionCardProps) {
   const { t } = useI18n()
 
   return (
@@ -32,6 +33,19 @@ export function SessionCard({ tokenPreview, user, loading, onSignOut, onSignOutA
           <Descriptions.Item label={t('session.userId')}>{user.id}</Descriptions.Item>
           <Descriptions.Item label={t('session.emailVerified')}>
             {user.emailVerified ? t('common.yes') : t('common.no')}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('session.roles')}>
+            {roles.length ? (
+              <Space wrap>
+                {roles.map((role) => (
+                  <Tag key={role} color={role === 'ROLE_ADMIN' ? 'geekblue' : 'default'}>
+                    {role}
+                  </Tag>
+                ))}
+              </Space>
+            ) : (
+              t('session.noRoles')
+            )}
           </Descriptions.Item>
           <Descriptions.Item label={t('session.token')}>{tokenPreview}</Descriptions.Item>
         </Descriptions>

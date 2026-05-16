@@ -14,6 +14,7 @@ import {
 import { refreshTokenStorageKey, tokenStorageKey } from '../../../shared/constants/storage'
 import type { AuthResponse, User } from '../types/auth'
 import { AuthSessionStore } from './auth-session-store'
+import { rolesFromJwt } from '../../../shared/lib/jwt'
 
 export function AuthSessionProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(false)
@@ -55,6 +56,9 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     if (token.length <= 28) return token
     return `${token.slice(0, 16)}...${token.slice(-10)}`
   }, [token])
+
+  const roles = useMemo(() => rolesFromJwt(token), [token])
+  const isAdmin = roles.includes('ROLE_ADMIN')
 
   async function signinWithPassword(email: string, password: string) {
     setLoading(true)
@@ -161,7 +165,9 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   }
 
   const value = {
+    isAdmin,
     loading,
+    roles,
     restoring,
     token,
     tokenPreview,

@@ -1,6 +1,7 @@
 package com.centralauth.auth;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -194,9 +195,17 @@ public class AuthService {
 
 	private AuthResponse toAuthResponse(User user) {
 		return new AuthResponse(
-				jwtService.createToken(user),
+				jwtService.createToken(user, rolesFor(user.id())),
 				refreshTokenService.issueRefreshToken(user.id()),
 				UserResponse.from(user));
+	}
+
+	private List<String> rolesFor(String userId) {
+		List<String> roles = userMapper.findRolesByUserId(userId);
+		if (roles.isEmpty()) {
+			return List.of(DEFAULT_ROLE);
+		}
+		return roles;
 	}
 
 	private void publishLoginFailed(String email, String clientIp, String reason) {
