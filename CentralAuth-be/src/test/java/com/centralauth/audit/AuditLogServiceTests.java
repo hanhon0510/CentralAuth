@@ -8,7 +8,9 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import com.centralauth.event.auth.AdminUserStatusChangedEvent;
 import com.centralauth.event.auth.LoginFailedEvent;
+import com.centralauth.user.AccountStatus;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 
 class AuditLogServiceTests {
@@ -40,6 +42,31 @@ class AuditLogServiceTests {
 		assertThat(auditLog.kafkaTopic()).isEqualTo("auth.user.login.failed");
 		assertThat(auditLog.kafkaKey()).isEqualTo("security@example.com");
 		assertThat(auditLog.payloadJson()).contains("\"reason\":\"INVALID_CREDENTIALS\"");
+	}
+
+	@Test
+	void recordStoresNormalizedAdminUserStatusChangedEvent() {
+		Instant occurredAt = Instant.parse("2026-05-16T02:03:04Z");
+		AdminUserStatusChangedEvent event = new AdminUserStatusChangedEvent(
+				"target-user-id",
+				"target@example.com",
+				AccountStatus.ACTIVE,
+				AccountStatus.LOCKED,
+				"admin-user-id",
+				occurredAt);
+
+		service.record(event, "auth.admin.user.status.changed", "target-user-id");
+
+		assertThat(mapper.inserted).hasSize(1);
+		AuditLog auditLog = mapper.inserted.getFirst();
+		assertThat(auditLog.eventType()).isEqualTo("ADMIN_USER_STATUS_CHANGED");
+		assertThat(auditLog.userId()).isEqualTo("target-user-id");
+		assertThat(auditLog.email()).isEqualTo("target@example.com");
+		assertThat(auditLog.reason()).isEqualTo("ACTIVE_TO_LOCKED");
+		assertThat(auditLog.occurredAt()).isEqualTo(occurredAt);
+		assertThat(auditLog.kafkaTopic()).isEqualTo("auth.admin.user.status.changed");
+		assertThat(auditLog.kafkaKey()).isEqualTo("target-user-id");
+		assertThat(auditLog.payloadJson()).contains("\"adminUserId\":\"admin-user-id\"");
 	}
 
 	@Test

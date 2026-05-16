@@ -9,6 +9,7 @@ public record User(
 		String displayName,
 		boolean enabled,
 		boolean emailVerified,
+		AccountStatus accountStatus,
 		Instant createdAt,
 		Instant updatedAt) {
 }

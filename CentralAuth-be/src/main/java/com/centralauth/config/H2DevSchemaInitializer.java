@@ -31,11 +31,14 @@ public class H2DevSchemaInitializer {
 				    display_name varchar(120),
 				    enabled boolean not null default false,
 				    email_verified boolean not null default false,
+				    account_status varchar(32) not null default 'UNVERIFIED',
 				    created_at timestamp with time zone not null default current_timestamp,
 				    updated_at timestamp with time zone not null default current_timestamp,
+				    constraint users_account_status_check check (account_status in ('ACTIVE', 'DISABLED', 'LOCKED', 'UNVERIFIED')),
 				    constraint users_email_key unique (email)
 				)
 				""");
 		jdbcTemplate.execute("create index if not exists users_enabled_idx on users (enabled)");
+		jdbcTemplate.execute("create index if not exists users_account_status_idx on users (account_status)");
 	}
 }

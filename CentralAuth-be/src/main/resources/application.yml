@@ -82,6 +82,9 @@ centralauth:
       max-attempts: ${CENTRALAUTH_LOGIN_RATE_LIMIT_MAX_ATTEMPTS:10}
       window: ${CENTRALAUTH_LOGIN_RATE_LIMIT_WINDOW:1m}
   kafka:
+    # Keep Kafka off by default so local dev/tests work without a broker.
+    # Set CENTRALAUTH_KAFKA_ENABLED=true when Kafka is available.
+    enabled: ${CENTRALAUTH_KAFKA_ENABLED:false}
     audit:
       enabled: ${CENTRALAUTH_KAFKA_AUDIT_ENABLED:true}
     topics:
@@ -92,3 +95,4 @@ centralauth:
       logout: auth.user.logout
       password-reset-requested: auth.user.password.reset.requested
       password-changed: auth.user.password.changed
+      admin-user-status-changed: auth.admin.user.status.changed

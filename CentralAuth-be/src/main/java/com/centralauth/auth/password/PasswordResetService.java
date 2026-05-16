@@ -19,6 +19,7 @@ import com.centralauth.auth.exception.InvalidPasswordResetTokenException;
 import com.centralauth.auth.token.RefreshTokenService;
 import com.centralauth.event.auth.PasswordChangedEvent;
 import com.centralauth.event.auth.PasswordResetRequestedEvent;
+import com.centralauth.user.AccountStatus;
 import com.centralauth.user.User;
 import com.centralauth.user.UserMapper;
 
@@ -57,7 +58,7 @@ public class PasswordResetService {
 	public void requestReset(String email) {
 		String normalizedEmail = normalizeEmail(email);
 		userMapper.findByEmail(normalizedEmail)
-				.filter(User::enabled)
+				.filter(user -> user.accountStatus() == AccountStatus.ACTIVE)
 				.ifPresent(this::issueResetToken);
 	}
 

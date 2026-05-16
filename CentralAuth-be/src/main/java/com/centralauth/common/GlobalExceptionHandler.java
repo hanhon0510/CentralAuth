@@ -7,6 +7,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.centralauth.admin.AdminUserNotFoundException;
 import com.centralauth.auth.exception.DuplicateEmailException;
 import com.centralauth.auth.exception.EmailVerificationNotPendingException;
 import com.centralauth.auth.exception.EmailVerificationOtpResendThrottledException;
@@ -75,6 +76,11 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
 				.header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.retryAfterSeconds()))
 				.body(ApiResponse.error(messages.get(ex)));
+	}
+
+	@ExceptionHandler(AdminUserNotFoundException.class)
+	public ResponseEntity<ApiResponse<Void>> handleAdminUserNotFound(AdminUserNotFoundException ex) {
+		return error(messages.get("admin.users.error.notFound"), HttpStatus.NOT_FOUND);
 	}
 
 	private ResponseEntity<ApiResponse<Void>> error(String message, HttpStatus status) {

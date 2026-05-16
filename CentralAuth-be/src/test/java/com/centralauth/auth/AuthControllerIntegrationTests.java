@@ -60,6 +60,7 @@ class AuthControllerIntegrationTests {
 		registry.add("spring.flyway.locations", () -> "classpath:db/migration");
 		registry.add("spring.data.redis.host", () -> "localhost");
 		registry.add("spring.kafka.bootstrap-servers", () -> "localhost:9092");
+		registry.add("centralauth.kafka.enabled", () -> "true");
 		registry.add("centralauth.kafka.audit.enabled", () -> "false");
 		registry.add("centralauth.jwt.secret", () -> "test-secret-with-at-least-32-characters");
 	}
@@ -95,6 +96,10 @@ class AuthControllerIntegrationTests {
 				    updated_at timestamp with time zone not null default current_timestamp,
 				    constraint users_email_key unique (email)
 				)
+				""");
+		jdbcTemplate.execute("""
+				alter table users
+				add column if not exists account_status varchar(32) not null default 'UNVERIFIED'
 				""");
 		jdbcTemplate.execute("""
 				create table if not exists user_roles (
@@ -978,6 +983,19 @@ class AuthControllerIntegrationTests {
 						.content("""
 								{"email":"enabled-unverified@example.com","password":"Password123!"}
 								"""))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Invalid email or password"));
+	}
+
+	@Test
+	void signinRejectsLockedAccountEvenWhenLegacyFlagsAreEnabled() throws Exception {
+		signupAndVerify("locked-status@example.com");
+		jdbcTemplate.update(
+				"update users set account_status = 'LOCKED', enabled = true, email_verified = true where email = ?",
+				"locked-status@example.com");
+
+		signinAttempt("locked-status@example.com", "Password123!", "203.0.113.72")
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.message").value("Invalid email or password"));

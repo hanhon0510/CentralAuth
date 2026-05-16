@@ -11,6 +11,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import com.centralauth.user.AccountStatus;
 import com.centralauth.user.User;
 import com.centralauth.user.UserMapper;
 
@@ -66,7 +67,7 @@ class AdminBootstrapServiceTests {
 
 		void addUser(String id, String email) {
 			usersByEmail.put(email.toLowerCase(Locale.ROOT),
-					new User(id, email, "password-hash", "Test User", true, true, null, null));
+					new User(id, email, "password-hash", "Test User", true, true, AccountStatus.ACTIVE, null, null));
 			rolesByUserId.putIfAbsent(id, new ArrayList<>());
 		}
 
@@ -93,6 +94,11 @@ class AdminBootstrapServiceTests {
 		}
 
 		@Override
+		public List<User> findAdminUsers(String email, AccountStatus accountStatus, int limit) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
 		public void insert(User user) {
 			throw new UnsupportedOperationException();
 		}
@@ -106,6 +112,15 @@ class AdminBootstrapServiceTests {
 		@Override
 		public List<String> findRolesByUserId(String userId) {
 			return List.copyOf(rolesByUserId.getOrDefault(userId, List.of()));
+		}
+
+		@Override
+		public int updateAccountStatus(
+				String id,
+				AccountStatus accountStatus,
+				boolean enabled,
+				boolean emailVerified) {
+			throw new UnsupportedOperationException();
 		}
 
 		@Override

@@ -10,6 +10,7 @@ public record KafkaTopicProperties(
 		String loginFailed,
 		String logout,
 		String passwordResetRequested,
-		String passwordChanged
+		String passwordChanged,
+		String adminUserStatusChanged
 ) {
 }

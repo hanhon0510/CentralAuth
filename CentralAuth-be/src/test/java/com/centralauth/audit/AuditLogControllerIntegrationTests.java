@@ -12,6 +12,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -19,6 +20,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.centralauth.security.JwtService;
+import com.centralauth.user.AccountStatus;
 import com.centralauth.user.User;
 
 @SpringBootTest
@@ -45,6 +47,9 @@ class AuditLogControllerIntegrationTests {
 
 	@Autowired
 	JwtService jwtService;
+
+	@Autowired
+	JdbcTemplate jdbcTemplate;
 
 	private MockMvc mockMvc() {
 		return MockMvcBuilders.webAppContextSetup(webApplicationContext).apply(springSecurity()).build();
@@ -78,12 +83,13 @@ class AuditLogControllerIntegrationTests {
 				UUID.randomUUID().toString(),
 				"{\"email\":\"viewer@example.com\"}"));
 		String token = jwtService.createToken(new User(
-				UUID.randomUUID().toString(),
+				insertUser("auditor@example.com", true),
 				"auditor@example.com",
 				"password-hash",
 				"Auditor",
 				true,
 				true,
+				AccountStatus.ACTIVE,
 				null,
 				null), List.of("ROLE_USER", "ROLE_ADMIN"));
 
@@ -106,17 +112,31 @@ class AuditLogControllerIntegrationTests {
 	@Test
 	void auditLogViewerRejectsNonAdminUser() throws Exception {
 		String token = jwtService.createToken(new User(
-				UUID.randomUUID().toString(),
+				insertUser("user@example.com", false),
 				"user@example.com",
 				"password-hash",
 				"User",
 				true,
 				true,
+				AccountStatus.ACTIVE,
 				null,
 				null), List.of("ROLE_USER"));
 
 		mockMvc().perform(get("/api/v1/audit-logs")
 						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isForbidden());
+	}
+
+	private String insertUser(String email, boolean admin) {
+		String id = UUID.randomUUID().toString();
+		jdbcTemplate.update("""
+				insert into users (id, email, password_hash, display_name, enabled, email_verified, account_status)
+				values (cast(? as uuid), ?, ?, ?, true, true, 'ACTIVE')
+				""", id, email, "password-hash", admin ? "Auditor" : "User");
+		jdbcTemplate.update("insert into user_roles (user_id, role) values (cast(? as uuid), ?)", id, "ROLE_USER");
+		if (admin) {
+			jdbcTemplate.update("insert into user_roles (user_id, role) values (cast(? as uuid), ?)", id, "ROLE_ADMIN");
+		}
+		return id;
 	}
 }

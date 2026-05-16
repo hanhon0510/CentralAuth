@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.centralauth.event.auth.AdminUserStatusChangedEvent;
 import com.centralauth.event.auth.LoginFailedEvent;
 import com.centralauth.event.auth.LoginSucceededEvent;
 import com.centralauth.event.auth.PasswordChangedEvent;
@@ -103,6 +104,15 @@ public class AuditLogService {
 					typed.email(),
 					null,
 					null,
+					typed.occurredAt());
+		}
+		if (event instanceof AdminUserStatusChangedEvent typed) {
+			return new AuditEventDetails(
+					"ADMIN_USER_STATUS_CHANGED",
+					typed.userId(),
+					typed.email(),
+					null,
+					typed.previousStatus() + "_TO_" + typed.newStatus(),
 					typed.occurredAt());
 		}
 		throw new IllegalArgumentException("Unsupported audit event type: " + event.getClass().getName());

@@ -33,11 +33,13 @@ body {
   font-weight: 700;
 }
 
-.audit-filter-row {
+.audit-filter-row,
+.admin-users-filter-row {
   width: 100%;
 }
 
-.audit-filter-item {
+.audit-filter-item,
+.admin-users-filter-item {
   min-width: 180px;
 }
 
@@ -45,11 +47,13 @@ body {
   min-width: 260px;
 }
 
-.audit-filter-item-small {
+.audit-filter-item-small,
+.admin-users-filter-item-small {
   width: 96px;
 }
 
-.audit-filter-action {
+.audit-filter-action,
+.admin-users-filter-action {
   margin-bottom: 24px;
 }
 
@@ -71,16 +75,20 @@ body {
 @media (max-width: 640px) {
   .audit-filter-item,
   .audit-filter-item-wide,
-  .audit-filter-item-small {
+  .audit-filter-item-small,
+  .admin-users-filter-item,
+  .admin-users-filter-item-small {
     width: 100%;
     min-width: 100%;
   }
 
-  .audit-filter-action {
+  .audit-filter-action,
+  .admin-users-filter-action {
     width: 100%;
   }
 
-  .audit-filter-action .ant-btn {
+  .audit-filter-action .ant-btn,
+  .admin-users-filter-action .ant-btn {
     width: 100%;
   }
 }

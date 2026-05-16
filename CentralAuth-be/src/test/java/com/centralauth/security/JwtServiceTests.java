@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import com.centralauth.user.AccountStatus;
 import com.centralauth.user.User;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 
@@ -26,6 +27,7 @@ class JwtServiceTests {
 				"Admin",
 				true,
 				true,
+				AccountStatus.ACTIVE,
 				null,
 				null);
 

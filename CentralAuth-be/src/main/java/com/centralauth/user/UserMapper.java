@@ -13,11 +13,22 @@ public interface UserMapper {
 
 	Optional<User> findById(@Param("id") String id);
 
+	List<User> findAdminUsers(
+			@Param("email") String email,
+			@Param("accountStatus") AccountStatus accountStatus,
+			@Param("limit") int limit);
+
 	void insert(User user);
 
 	void insertRole(@Param("userId") String userId, @Param("role") String role);
 
 	List<String> findRolesByUserId(@Param("userId") String userId);
+
+	int updateAccountStatus(
+			@Param("id") String id,
+			@Param("accountStatus") AccountStatus accountStatus,
+			@Param("enabled") boolean enabled,
+			@Param("emailVerified") boolean emailVerified);
 
 	int verifyEmail(@Param("email") String email);
 

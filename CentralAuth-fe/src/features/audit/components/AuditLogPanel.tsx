@@ -29,6 +29,7 @@ const eventTypes = [
   'USER_LOGGED_OUT',
   'PASSWORD_RESET_REQUESTED',
   'PASSWORD_CHANGED',
+  'ADMIN_USER_STATUS_CHANGED',
 ]
 
 export function AuditLogPanel({ token }: AuditLogPanelProps) {

@@ -37,6 +37,7 @@ import com.centralauth.event.auth.UserRegisteredEvent;
 import com.centralauth.event.auth.UserLoggedOutEvent;
 import com.centralauth.event.auth.UserVerifiedEvent;
 import com.centralauth.security.JwtService;
+import com.centralauth.user.AccountStatus;
 import com.centralauth.user.User;
 import com.centralauth.user.UserMapper;
 
@@ -83,6 +84,7 @@ public class AuthService {
 				normalizeDisplayName(request.displayName()),
 				false,
 				false,
+				AccountStatus.UNVERIFIED,
 				null,
 				null);
 		try {
@@ -154,8 +156,7 @@ public class AuthService {
 		}
 
 		User user = userMapper.findByEmail(email)
-				.filter(User::enabled)
-				.filter(User::emailVerified)
+				.filter(this::activeAccount)
 				.filter(candidate -> passwordEncoder.matches(request.password(), candidate.passwordHash()))
 				.orElse(null);
 		if (user == null) {
@@ -188,7 +189,7 @@ public class AuthService {
 
 	public UserResponse currentUser(String userId) {
 		return userMapper.findById(userId)
-				.filter(User::enabled)
+				.filter(this::activeAccount)
 				.map(UserResponse::from)
 				.orElseThrow(InvalidCredentialsException::new);
 	}
@@ -210,6 +211,10 @@ public class AuthService {
 
 	private void publishLoginFailed(String email, String clientIp, String reason) {
 		eventPublisher.publishEvent(new LoginFailedEvent(email, clientIp, reason, Instant.now()));
+	}
+
+	private boolean activeAccount(User user) {
+		return user.accountStatus() == AccountStatus.ACTIVE;
 	}
 
 	private String normalizeEmail(String email) {

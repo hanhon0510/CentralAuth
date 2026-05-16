@@ -39,6 +39,7 @@ public class SecurityConfig {
 								"/api/v1/auth/reset-password",
 								"/actuator/health",
 								"/actuator/info").permitAll()
+						.requestMatchers("/api/v1/admin/**").hasAuthority("ROLE_ADMIN")
 						.requestMatchers("/api/v1/audit-logs").hasAuthority("ROLE_ADMIN")
 						.anyRequest().authenticated())
 				.exceptionHandling(exception -> exception.authenticationEntryPoint(restAuthenticationEntryPoint))
