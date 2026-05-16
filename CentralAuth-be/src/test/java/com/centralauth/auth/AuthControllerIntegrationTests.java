@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.matches;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -19,6 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -32,6 +34,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.MediaType;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -65,6 +68,9 @@ class AuthControllerIntegrationTests {
 
 	@MockitoBean
 	StringRedisTemplate redisTemplate;
+
+	@MockitoBean
+	KafkaTemplate<String, Object> kafkaTemplate;
 
 	ValueOperations<String, String> valueOperations;
 
@@ -245,6 +251,29 @@ class AuthControllerIntegrationTests {
 	}
 
 	@Test
+	void signupPublishesUserRegisteredEvent() throws Exception {
+		String email = "registered-event@example.com";
+
+		mockMvc().perform(post("/api/v1/auth/signup")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"%s","password":"Password123!","displayName":"Registered Event"}
+								""".formatted(email)))
+				.andExpect(status().isOk());
+
+		String userId = userIdFor(email);
+		ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+		verify(kafkaTemplate).send(eq("auth.user.registered"), eq(userId), eventCaptor.capture());
+		assertThat(eventCaptor.getValue())
+				.hasFieldOrPropertyWithValue("userId", userId)
+				.hasFieldOrPropertyWithValue("email", email)
+				.hasFieldOrPropertyWithValue("displayName", "Registered Event");
+		assertThat(eventCaptor.getValue())
+				.extracting("occurredAt")
+				.isInstanceOf(Instant.class);
+	}
+
+	@Test
 	void signupUsesVietnameseMessageWhenRequested() throws Exception {
 		mockMvc().perform(post("/api/v1/auth/signup")
 						.header("Accept-Language", "vi")
@@ -289,6 +318,32 @@ class AuthControllerIntegrationTests {
 				.andExpect(jsonPath("$.message").value("Signin successful"))
 				.andExpect(jsonPath("$.data.user.email").value("verify@example.com"))
 				.andExpect(jsonPath("$.data.user.emailVerified").value(true));
+	}
+
+	@Test
+	void verifyEmailPublishesUserVerifiedEvent() throws Exception {
+		String email = "verified-event@example.com";
+		mockMvc().perform(post("/api/v1/auth/signup")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"%s","password":"Password123!","displayName":"Verified Event"}
+								""".formatted(email)))
+				.andExpect(status().isOk());
+
+		String otp = captureSignupOtp(email);
+		String userId = userIdFor(email);
+		clearInvocations(kafkaTemplate);
+
+		verifyEmail(email, otp);
+
+		ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+		verify(kafkaTemplate).send(eq("auth.user.verified"), eq(userId), eventCaptor.capture());
+		assertThat(eventCaptor.getValue())
+				.hasFieldOrPropertyWithValue("userId", userId)
+				.hasFieldOrPropertyWithValue("email", email);
+		assertThat(eventCaptor.getValue())
+				.extracting("occurredAt")
+				.isInstanceOf(Instant.class);
 	}
 
 	@Test

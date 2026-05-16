@@ -1,9 +1,11 @@
 package com.centralauth.auth;
 
+import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
 
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +20,8 @@ import com.centralauth.auth.dto.SigninRequest;
 import com.centralauth.auth.dto.SignupRequest;
 import com.centralauth.auth.dto.UserResponse;
 import com.centralauth.auth.dto.VerifyEmailRequest;
+import com.centralauth.event.UserRegisteredEvent;
+import com.centralauth.event.UserVerifiedEvent;
 import com.centralauth.security.JwtService;
 import com.centralauth.user.User;
 import com.centralauth.user.UserMapper;
@@ -34,6 +38,7 @@ public class AuthService {
 	private final RefreshTokenService refreshTokenService;
 	private final LoginAttemptService loginAttemptService;
 	private final PasswordResetService passwordResetService;
+	private final ApplicationEventPublisher eventPublisher;
 
 	public AuthService(
 			UserMapper userMapper,
@@ -42,7 +47,8 @@ public class AuthService {
 			EmailVerificationService emailVerificationService,
 			RefreshTokenService refreshTokenService,
 			LoginAttemptService loginAttemptService,
-			PasswordResetService passwordResetService) {
+			PasswordResetService passwordResetService,
+			ApplicationEventPublisher eventPublisher) {
 		this.userMapper = userMapper;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtService = jwtService;
@@ -50,6 +56,7 @@ public class AuthService {
 		this.refreshTokenService = refreshTokenService;
 		this.loginAttemptService = loginAttemptService;
 		this.passwordResetService = passwordResetService;
+		this.eventPublisher = eventPublisher;
 	}
 
 	@Transactional
@@ -74,9 +81,16 @@ public class AuthService {
 		emailVerificationService.issueOtp(email);
 
 		User savedUser = userMapper.findByEmail(email).orElse(user);
-		return toAuthResponse(savedUser);
+		AuthResponse response = toAuthResponse(savedUser);
+		eventPublisher.publishEvent(new UserRegisteredEvent(
+				savedUser.id(),
+				savedUser.email(),
+				savedUser.displayName(),
+				Instant.now()));
+		return response;
 	}
 
+	@Transactional
 	public void verifyEmail(VerifyEmailRequest request) {
 		String email = normalizeEmail(request.email());
 		emailVerificationService.requireValidOtp(email, request.otp());
@@ -84,6 +98,11 @@ public class AuthService {
 			throw new InvalidEmailVerificationOtpException();
 		}
 		emailVerificationService.consumeOtp(email);
+		User verifiedUser = userMapper.findByEmail(email).orElseThrow(InvalidEmailVerificationOtpException::new);
+		eventPublisher.publishEvent(new UserVerifiedEvent(
+				verifiedUser.id(),
+				verifiedUser.email(),
+				Instant.now()));
 	}
 
 	public ResendVerificationOtpResponse resendVerificationOtp(ResendVerificationOtpRequest request) {
