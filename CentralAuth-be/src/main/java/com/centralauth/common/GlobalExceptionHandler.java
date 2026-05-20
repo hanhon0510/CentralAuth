@@ -16,6 +16,10 @@ import com.centralauth.auth.exception.InvalidCredentialsException;
 import com.centralauth.auth.exception.InvalidPasswordResetTokenException;
 import com.centralauth.auth.login.LoginRateLimitExceededException;
 import com.centralauth.auth.login.LoginTemporarilyLockedException;
+import com.centralauth.client.ClientApplicationNotFoundException;
+import com.centralauth.client.DuplicateClientApplicationException;
+import com.centralauth.client.InactiveClientApplicationException;
+import com.centralauth.client.InvalidClientMetadataException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -81,6 +85,26 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(AdminUserNotFoundException.class)
 	public ResponseEntity<ApiResponse<Void>> handleAdminUserNotFound(AdminUserNotFoundException ex) {
 		return error(messages.get("admin.users.error.notFound"), HttpStatus.NOT_FOUND);
+	}
+
+	@ExceptionHandler(ClientApplicationNotFoundException.class)
+	public ResponseEntity<ApiResponse<Void>> handleClientApplicationNotFound(ClientApplicationNotFoundException ex) {
+		return error(messages.get("admin.clients.error.notFound"), HttpStatus.NOT_FOUND);
+	}
+
+	@ExceptionHandler(DuplicateClientApplicationException.class)
+	public ResponseEntity<ApiResponse<Void>> handleDuplicateClientApplication(DuplicateClientApplicationException ex) {
+		return error(messages.get("admin.clients.error.duplicate"), HttpStatus.CONFLICT);
+	}
+
+	@ExceptionHandler(InvalidClientMetadataException.class)
+	public ResponseEntity<ApiResponse<Void>> handleInvalidClientMetadata(InvalidClientMetadataException ex) {
+		return error(messages.get("admin.clients.error.invalidMetadata"), HttpStatus.BAD_REQUEST);
+	}
+
+	@ExceptionHandler(InactiveClientApplicationException.class)
+	public ResponseEntity<ApiResponse<Void>> handleInactiveClientApplication(InactiveClientApplicationException ex) {
+		return error(messages.get("admin.clients.error.inactive"), HttpStatus.BAD_REQUEST);
 	}
 
 	private ResponseEntity<ApiResponse<Void>> error(String message, HttpStatus status) {

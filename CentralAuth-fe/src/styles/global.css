@@ -34,7 +34,8 @@ body {
 }
 
 .audit-filter-row,
-.admin-users-filter-row {
+.admin-users-filter-row,
+.admin-clients-toolbar {
   width: 100%;
 }
 
@@ -90,5 +91,48 @@ body {
   .audit-filter-action .ant-btn,
   .admin-users-filter-action .ant-btn {
     width: 100%;
+  }
+}
+
+.admin-clients-toolbar {
+  justify-content: flex-end;
+}
+
+.admin-clients-toolbar .ant-space-item {
+  display: flex;
+}
+
+.admin-clients-metadata-list {
+  max-width: 100%;
+}
+
+.admin-clients-metadata-tag {
+  max-width: 100%;
+  padding: 2px 8px;
+}
+
+.admin-clients-metadata-text {
+  max-width: 280px;
+}
+
+.admin-clients-textarea {
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+}
+
+@media (max-width: 640px) {
+  .admin-clients-toolbar {
+    justify-content: stretch;
+  }
+
+  .admin-clients-toolbar .ant-space-item {
+    flex: 1 1 140px;
+  }
+
+  .admin-clients-toolbar .ant-btn {
+    width: 100%;
+  }
+
+  .admin-clients-metadata-text {
+    max-width: 220px;
   }
 }

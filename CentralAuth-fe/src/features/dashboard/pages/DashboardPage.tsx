@@ -5,6 +5,7 @@ import { LanguageSwitcher } from '../../../shared/i18n/LanguageSwitcher';
 import { useI18n } from '../../../shared/i18n/useI18n';
 import { AuditLogPanel } from '../../audit/components/AuditLogPanel';
 import { AdminUsersPanel } from '../../admin-users/components/AdminUsersPanel';
+import { AdminClientsPanel } from '../../admin-clients/components/AdminClientsPanel';
 
 export function DashboardPage() {
   const { isAdmin, roles, token, user, tokenPreview, loading, signOut, signOutAllDevices } = useAuthSession();
@@ -42,6 +43,7 @@ export function DashboardPage() {
                 onSignOutAllDevices={signOutAllDevices}
               />
               {isAdmin ? <AdminUsersPanel token={token} /> : null}
+              {isAdmin ? <AdminClientsPanel token={token} /> : null}
               {isAdmin ? <AuditLogPanel token={token} /> : null}
             </Space>
           </Col>
