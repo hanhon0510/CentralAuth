@@ -1,10 +1,19 @@
 import { apiRequest } from '../../../shared/lib/http'
-import type { AuthResponse, User } from '../types/auth'
+import type {
+  AuthResponse,
+  CentralLoginContext,
+  CentralLoginRedirectResponse,
+  CentralLoginRequestContext,
+  CentralLoginResponse,
+  User,
+} from '../types/auth'
 
 type SigninPayload = {
   email: string
   password: string
 }
+
+type CentralLoginPayload = SigninPayload & CentralLoginRequestContext
 
 type SignupPayload = SigninPayload & {
   displayName: string
@@ -42,6 +51,31 @@ export function signin(payload: SigninPayload) {
   return apiRequest<AuthResponse>('/api/v1/auth/signin', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function getCentralLoginContext(params: CentralLoginRequestContext) {
+  return apiRequest<CentralLoginContext>(
+    `/api/v1/auth/central-login/context?${centralLoginSearchParams(params)}`,
+  )
+}
+
+export function centralLogin(payload: CentralLoginPayload) {
+  return apiRequest<CentralLoginResponse>('/api/v1/auth/central-login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function continueCentralLogin(token: string, payload: CentralLoginRequestContext) {
+  return apiRequest<CentralLoginRedirectResponse>('/api/v1/auth/central-login/continue', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify(payload),
   })
 }
@@ -102,4 +136,17 @@ export function signup(payload: SignupPayload) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+}
+
+function centralLoginSearchParams(params: CentralLoginRequestContext) {
+  const searchParams = new URLSearchParams({
+    client_id: params.clientId,
+    redirect_uri: params.redirectUri,
+  })
+
+  if (params.state) {
+    searchParams.set('state', params.state)
+  }
+
+  return searchParams.toString()
 }

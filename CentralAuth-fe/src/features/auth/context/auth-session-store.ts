@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import type { User } from '../types/auth'
+import type { CentralLoginRedirectResponse, CentralLoginRequestContext, User } from '../types/auth'
 
 export type AuthSessionContextValue = {
   isAdmin: boolean
@@ -10,6 +10,11 @@ export type AuthSessionContextValue = {
   tokenPreview: string
   user: User | null
   signinWithPassword: (email: string, password: string) => Promise<void>
+  signinWithCentralLogin: (
+    email: string,
+    password: string,
+    context: CentralLoginRequestContext,
+  ) => Promise<CentralLoginRedirectResponse>
   signupWithPassword: (email: string, password: string, displayName: string) => Promise<User>
   verifyEmailWithOtp: (email: string, otp: string) => Promise<void>
   resendVerificationOtp: (email: string) => Promise<number>

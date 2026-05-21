@@ -236,6 +236,138 @@ class AuthControllerIntegrationTests {
 				""", Integer.class, email);
 	}
 
+	private void insertClient(String clientId, String clientName, String redirectUri) {
+		jdbcTemplate.update("""
+				insert into clients (client_id, client_name, active)
+				values (?, ?, true)
+				""", clientId, clientName);
+		jdbcTemplate.update("""
+				insert into client_redirect_uris (client_id, redirect_uri)
+				values (?, ?)
+				""", clientId, redirectUri);
+	}
+
+	private void assertCentralLoginCodeStored(String code, String email, String clientId, String redirectUri, String state) {
+		ArgumentCaptor<String> contextCaptor = ArgumentCaptor.forClass(String.class);
+		verify(valueOperations).set(
+				eq("central-login-code:" + code),
+				contextCaptor.capture(),
+				eq(Duration.ofMinutes(5)));
+		assertThat(contextCaptor.getValue())
+				.contains("\"userId\":\"" + userIdFor(email) + "\"")
+				.contains("\"clientId\":\"" + clientId + "\"")
+				.contains("\"redirectUri\":\"" + redirectUri + "\"")
+				.contains("\"state\":\"" + state + "\"");
+	}
+
+	@Test
+	void centralLoginContextValidatesClientAndReturnsDisplayMetadata() throws Exception {
+		insertClient(
+				"dashboard-app",
+				"Dashboard App",
+				"https://dashboard.example.com/auth/callback");
+
+		mockMvc().perform(get("/api/v1/auth/central-login/context")
+						.param("client_id", "dashboard-app")
+						.param("redirect_uri", "https://dashboard.example.com/auth/callback")
+						.param("state", "client-state-123"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Central login context"))
+				.andExpect(jsonPath("$.data.clientId").value("dashboard-app"))
+				.andExpect(jsonPath("$.data.clientName").value("Dashboard App"))
+				.andExpect(jsonPath("$.data.redirectUri").value("https://dashboard.example.com/auth/callback"))
+				.andExpect(jsonPath("$.data.state").value("client-state-123"));
+	}
+
+	@Test
+	void centralLoginContextRejectsMismatchedRedirectUri() throws Exception {
+		insertClient(
+				"mismatched-app",
+				"Mismatched App",
+				"https://dashboard.example.com/auth/callback");
+
+		mockMvc().perform(get("/api/v1/auth/central-login/context")
+						.param("client_id", "mismatched-app")
+						.param("redirect_uri", "https://evil.example.com/auth/callback"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Invalid client metadata"));
+	}
+
+	@Test
+	void centralLoginSigninReturnsRedirectCodeAndStoresTemporaryContext() throws Exception {
+		String email = "central-login@example.com";
+		String redirectUri = "https://dashboard.example.com/auth/callback";
+		signupAndVerify(email);
+		insertClient("central-dashboard", "Central Dashboard", redirectUri);
+		clearInvocations(valueOperations, redisTemplate, kafkaTemplate);
+
+		MvcResult result = mockMvc().perform(post("/api/v1/auth/central-login")
+						.header("X-Forwarded-For", "203.0.113.80")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "email":"%s",
+								  "password":"Password123!",
+								  "clientId":"central-dashboard",
+								  "redirectUri":"%s",
+								  "state":"state-after-login"
+								}
+								""".formatted(email, redirectUri)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Central login successful"))
+				.andExpect(jsonPath("$.data.redirectUri").value(redirectUri))
+				.andExpect(jsonPath("$.data.code", not(blankOrNullString())))
+				.andExpect(jsonPath("$.data.state").value("state-after-login"))
+				.andExpect(jsonPath("$.data.auth.token", not(blankOrNullString())))
+				.andExpect(jsonPath("$.data.auth.user.email").value(email))
+				.andReturn();
+
+		assertCentralLoginCodeStored(
+				stringFieldFrom(result, "code"),
+				email,
+				"central-dashboard",
+				redirectUri,
+				"state-after-login");
+	}
+
+	@Test
+	void centralLoginContinueReturnsRedirectCodeForCurrentSession() throws Exception {
+		String email = "central-continue@example.com";
+		String redirectUri = "https://console.example.com/auth/callback";
+		signupAndVerify(email);
+		insertClient("central-console", "Central Console", redirectUri);
+		MvcResult signin = signin(email, "Password123!");
+		clearInvocations(valueOperations, redisTemplate, kafkaTemplate);
+
+		MvcResult result = mockMvc().perform(post("/api/v1/auth/central-login/continue")
+						.header("Authorization", "Bearer " + tokenFrom(signin))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "clientId":"central-console",
+								  "redirectUri":"%s",
+								  "state":"existing-session-state"
+								}
+								""".formatted(redirectUri)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Central login successful"))
+				.andExpect(jsonPath("$.data.redirectUri").value(redirectUri))
+				.andExpect(jsonPath("$.data.code", not(blankOrNullString())))
+				.andExpect(jsonPath("$.data.state").value("existing-session-state"))
+				.andReturn();
+
+		assertCentralLoginCodeStored(
+				stringFieldFrom(result, "code"),
+				email,
+				"central-console",
+				redirectUri,
+				"existing-session-state");
+	}
+
 	@Test
 	void signupCreatesUserAndReturnsToken() throws Exception {
 		mockMvc().perform(post("/api/v1/auth/signup")

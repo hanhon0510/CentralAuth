@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PropsWithChildren } from 'react'
 import {
+  centralLogin,
   forgotPassword as requestPasswordResetApi,
   logout,
   logoutAllDevices,
@@ -12,7 +13,7 @@ import {
   verifyEmail,
 } from '../api/authApi'
 import { refreshTokenStorageKey, tokenStorageKey } from '../../../shared/constants/storage'
-import type { AuthResponse, User } from '../types/auth'
+import type { AuthResponse, CentralLoginRequestContext, User } from '../types/auth'
 import { AuthSessionStore } from './auth-session-store'
 import { rolesFromJwt } from '../../../shared/lib/jwt'
 
@@ -65,6 +66,31 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     try {
       const response = await signin({ email, password })
       storeSession(response)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function signinWithCentralLogin(
+    email: string,
+    password: string,
+    context: CentralLoginRequestContext,
+  ) {
+    setLoading(true)
+    try {
+      const response = await centralLogin({
+        email,
+        password,
+        clientId: context.clientId,
+        redirectUri: context.redirectUri,
+        state: context.state ?? undefined,
+      })
+      storeSession(response.auth)
+      return {
+        redirectUri: response.redirectUri,
+        code: response.code,
+        state: response.state,
+      }
     } finally {
       setLoading(false)
     }
@@ -173,6 +199,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     tokenPreview,
     user,
     signinWithPassword,
+    signinWithCentralLogin,
     signupWithPassword,
     verifyEmailWithOtp,
     resendVerificationOtp,

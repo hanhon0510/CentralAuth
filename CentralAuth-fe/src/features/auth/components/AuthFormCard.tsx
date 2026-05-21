@@ -20,8 +20,10 @@ type AuthFormValues = {
 
 type AuthFormCardProps = {
   mode: AuthMode;
+  title?: string;
   loading: boolean;
   restoring: boolean;
+  submitDisabled?: boolean;
   error: string;
   onForgotPassword: () => void;
   onModeChange: (mode: AuthMode) => void;
@@ -30,8 +32,10 @@ type AuthFormCardProps = {
 
 export function AuthFormCard({
   mode,
+  title,
   loading,
   restoring,
+  submitDisabled = false,
   error,
   onForgotPassword,
   onModeChange,
@@ -52,7 +56,7 @@ export function AuthFormCard({
   }, [form, language]);
 
   return (
-    <Card title={t('auth.emailAccess')}>
+    <Card title={title ?? t('auth.emailAccess')}>
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         <Segmented<AuthMode>
           block
@@ -128,7 +132,7 @@ export function AuthFormCard({
             type="primary"
             htmlType="submit"
             loading={loading}
-            disabled={restoring}
+            disabled={restoring || submitDisabled}
             block
           >
             {mode === 'signup' ? t('auth.createAccount') : t('auth.signin')}
