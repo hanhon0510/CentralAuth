@@ -3,6 +3,10 @@ import { AuthPage } from '../../features/auth/pages/AuthPage'
 import { DashboardPage } from '../../features/dashboard/pages/DashboardPage'
 import { ROUTES } from '../../shared/constants/routes'
 import { useAuthSession } from '../../features/auth/context/useAuthSession'
+import { demoClients } from '../../features/demo-clients/demoClients'
+import { DemoClientCallbackPage } from '../../features/demo-clients/pages/DemoClientCallbackPage'
+import { DemoClientProtectedPage } from '../../features/demo-clients/pages/DemoClientProtectedPage'
+import { DemoClientPublicPage } from '../../features/demo-clients/pages/DemoClientPublicPage'
 
 function ProtectedDashboardRoute() {
   const { user, restoring } = useAuthSession()
@@ -19,6 +23,31 @@ export function AppRouter() {
       <Route path={ROUTES.signin} element={<AuthPage mode="signin" />} />
       <Route path={ROUTES.signup} element={<AuthPage mode="signup" />} />
       <Route path={ROUTES.dashboard} element={<ProtectedDashboardRoute />} />
+      <Route path="/demo" element={<Navigate to={demoClients.projects.publicPath} replace />} />
+      <Route
+        path={demoClients.projects.publicPath}
+        element={<DemoClientPublicPage client={demoClients.projects} />}
+      />
+      <Route
+        path={demoClients.projects.protectedPath}
+        element={<DemoClientProtectedPage client={demoClients.projects} />}
+      />
+      <Route
+        path={demoClients.projects.callbackPath}
+        element={<DemoClientCallbackPage client={demoClients.projects} />}
+      />
+      <Route
+        path={demoClients.reports.publicPath}
+        element={<DemoClientPublicPage client={demoClients.reports} />}
+      />
+      <Route
+        path={demoClients.reports.protectedPath}
+        element={<DemoClientProtectedPage client={demoClients.reports} />}
+      />
+      <Route
+        path={demoClients.reports.callbackPath}
+        element={<DemoClientCallbackPage client={demoClients.reports} />}
+      />
       <Route path="*" element={<Navigate to={ROUTES.signin} replace />} />
     </Routes>
   )

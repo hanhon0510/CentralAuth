@@ -63,6 +63,8 @@ server:
 centralauth:
   admin:
     bootstrap-emails: ${CENTRALAUTH_ADMIN_BOOTSTRAP_EMAILS:}
+  demo-clients:
+    enabled: ${CENTRALAUTH_DEMO_CLIENTS_ENABLED:true}
   email-verification:
     otp-ttl: ${CENTRALAUTH_EMAIL_VERIFICATION_OTP_TTL:10m}
     resend-cooldown: ${CENTRALAUTH_EMAIL_VERIFICATION_RESEND_COOLDOWN:60s}
