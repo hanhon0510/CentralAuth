@@ -37,5 +37,29 @@ class JwtServiceTests {
 		assertThat(principal.userId()).isEqualTo(user.id());
 		assertThat(principal.email()).isEqualTo(user.email());
 		assertThat(principal.roles()).containsExactly("ROLE_USER", "ROLE_ADMIN");
+		assertThat(principal.centralAuthAccessToken()).isTrue();
+		assertThat(principal.audience()).isNull();
+	}
+
+	@Test
+	void createClientTokenScopesTokenToClientWithoutCentralAuthRoles() {
+		User user = new User(
+				"bb210a47-04c2-45d1-a931-49f124ad13f9",
+				"client-user@example.com",
+				"password-hash",
+				"Client User",
+				true,
+				true,
+				AccountStatus.ACTIVE,
+				null,
+				null);
+
+		String token = jwtService.createClientToken(user, "dashboard-client");
+
+		JwtPrincipal principal = jwtService.validate(token).orElseThrow();
+		assertThat(principal.userId()).isEqualTo(user.id());
+		assertThat(principal.roles()).isEmpty();
+		assertThat(principal.centralAuthAccessToken()).isFalse();
+		assertThat(principal.audience()).isEqualTo("dashboard-client");
 	}
 }

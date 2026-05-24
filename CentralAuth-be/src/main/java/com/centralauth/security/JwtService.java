@@ -45,6 +45,14 @@ public class JwtService {
 	}
 
 	public String createToken(User user, List<String> roles) {
+		return createToken(user, roles, JwtPrincipal.CENTRAL_AUTH_ACCESS, null);
+	}
+
+	public String createClientToken(User user, String clientId) {
+		return createToken(user, List.of(), JwtPrincipal.CLIENT_ACCESS, clientId);
+	}
+
+	private String createToken(User user, List<String> roles, String tokenUse, String audience) {
 		Instant now = Instant.now();
 		Map<String, Object> header = Map.of("alg", "HS256", "typ", "JWT");
 		Map<String, Object> claims = new LinkedHashMap<>();
@@ -52,6 +60,10 @@ public class JwtService {
 		claims.put("sub", user.id().toString());
 		claims.put("email", user.email());
 		claims.put("roles", roles);
+		claims.put("token_use", tokenUse);
+		if (audience != null) {
+			claims.put("aud", audience);
+		}
 		claims.put("iat", now.getEpochSecond());
 		claims.put("exp", now.plusSeconds(expiresInSeconds).getEpochSecond());
 
@@ -85,7 +97,15 @@ public class JwtService {
 			}
 			String userId = (String) claims.get("sub");
 			String email = (String) claims.get("email");
-			return Optional.of(new JwtPrincipal(userId, email, rolesClaim(claims)));
+			String tokenUse = stringClaim(claims, "token_use");
+			String audience = stringClaim(claims, "aud");
+			if (!recognizedTokenUse(tokenUse)) {
+				return Optional.empty();
+			}
+			if (JwtPrincipal.CLIENT_ACCESS.equals(tokenUse) && (audience == null || audience.isBlank())) {
+				return Optional.empty();
+			}
+			return Optional.of(new JwtPrincipal(userId, email, rolesClaim(claims), tokenUse, audience));
 		}
 		catch (RuntimeException | java.io.IOException ex) {
 			return Optional.empty();
@@ -118,6 +138,22 @@ public class JwtService {
 			return number.longValue();
 		}
 		throw new IllegalArgumentException("Missing numeric claim " + name);
+	}
+
+	private String stringClaim(Map<String, Object> claims, String name) {
+		Object value = claims.get(name);
+		if (value == null) {
+			return null;
+		}
+		if (value instanceof String string) {
+			return string;
+		}
+		throw new IllegalArgumentException("Invalid string claim " + name);
+	}
+
+	private boolean recognizedTokenUse(String tokenUse) {
+		return JwtPrincipal.CENTRAL_AUTH_ACCESS.equals(tokenUse)
+				|| JwtPrincipal.CLIENT_ACCESS.equals(tokenUse);
 	}
 
 	private List<String> rolesClaim(Map<String, Object> claims) {

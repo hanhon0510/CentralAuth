@@ -38,6 +38,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		}
 
 		jwtService.validate(authorization.substring(7))
+				.filter(JwtPrincipal::centralAuthAccessToken)
 				.filter(this::hasActiveAccount)
 				.ifPresentOrElse(
 						principal -> SecurityContextHolder.getContext().setAuthentication(authentication(principal)),

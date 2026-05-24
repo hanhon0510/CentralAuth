@@ -13,11 +13,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.centralauth.auth.central.CentralLoginService;
 import com.centralauth.auth.dto.AuthResponse;
+import com.centralauth.auth.dto.AuthorizationCodeExchangeRequest;
 import com.centralauth.auth.dto.CentralLoginContextResponse;
 import com.centralauth.auth.dto.CentralLoginContinueRequest;
 import com.centralauth.auth.dto.CentralLoginRedirectResponse;
 import com.centralauth.auth.dto.CentralLoginRequest;
 import com.centralauth.auth.dto.CentralLoginResponse;
+import com.centralauth.auth.dto.CentralLoginTokenResponse;
 import com.centralauth.auth.dto.ForgotPasswordRequest;
 import com.centralauth.auth.dto.LogoutRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpRequest;
@@ -91,6 +93,14 @@ public class AuthController {
 		return ApiResponse.success(
 				messages.get("auth.centralLogin.success"),
 				centralLoginService.continueLogin((String) authentication.getPrincipal(), request));
+	}
+
+	@PostMapping("/central-login/token")
+	public ApiResponse<CentralLoginTokenResponse> exchangeCentralLoginCode(
+			@Valid @RequestBody AuthorizationCodeExchangeRequest request) {
+		return ApiResponse.success(
+				messages.get("auth.centralLogin.token"),
+				centralLoginService.exchangeCode(request));
 	}
 
 	@PostMapping("/verify-email")

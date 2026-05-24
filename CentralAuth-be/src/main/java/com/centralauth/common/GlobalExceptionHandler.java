@@ -11,6 +11,8 @@ import com.centralauth.admin.AdminUserNotFoundException;
 import com.centralauth.auth.exception.DuplicateEmailException;
 import com.centralauth.auth.exception.EmailVerificationNotPendingException;
 import com.centralauth.auth.exception.EmailVerificationOtpResendThrottledException;
+import com.centralauth.auth.exception.InvalidAuthorizationCodeException;
+import com.centralauth.auth.exception.InvalidCentralLoginStateException;
 import com.centralauth.auth.exception.InvalidEmailVerificationOtpException;
 import com.centralauth.auth.exception.InvalidCredentialsException;
 import com.centralauth.auth.exception.InvalidPasswordResetTokenException;
@@ -52,6 +54,16 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler(InvalidPasswordResetTokenException.class)
 	public ResponseEntity<ApiResponse<Void>> handleInvalidPasswordResetToken(InvalidPasswordResetTokenException ex) {
+		return error(messages.get(ex), HttpStatus.BAD_REQUEST);
+	}
+
+	@ExceptionHandler(InvalidAuthorizationCodeException.class)
+	public ResponseEntity<ApiResponse<Void>> handleInvalidAuthorizationCode(InvalidAuthorizationCodeException ex) {
+		return error(messages.get(ex), HttpStatus.BAD_REQUEST);
+	}
+
+	@ExceptionHandler(InvalidCentralLoginStateException.class)
+	public ResponseEntity<ApiResponse<Void>> handleInvalidCentralLoginState(InvalidCentralLoginStateException ex) {
 		return error(messages.get(ex), HttpStatus.BAD_REQUEST);
 	}
 

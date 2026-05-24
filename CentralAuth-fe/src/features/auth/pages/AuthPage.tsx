@@ -87,6 +87,7 @@ function toCentralLoginRequestContext(context: CentralLoginContext): CentralLogi
     clientId: context.clientId,
     redirectUri: context.redirectUri,
     state: context.state,
+    loginState: context.loginState,
   }
 }
 
@@ -95,14 +96,7 @@ function centralLoginKey(context: CentralLoginRequestContext | CentralLoginConte
 }
 
 function buildClientRedirectUrl(response: CentralLoginRedirectResponse) {
-  const redirectUrl = new URL(response.redirectUri)
-  redirectUrl.searchParams.set('code', response.code)
-
-  if (response.state) {
-    redirectUrl.searchParams.set('state', response.state)
-  }
-
-  return redirectUrl.toString()
+  return response.redirectUrl
 }
 
 export function AuthPage({ mode }: AuthPageProps) {

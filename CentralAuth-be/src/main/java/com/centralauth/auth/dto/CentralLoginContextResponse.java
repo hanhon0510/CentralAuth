@@ -4,5 +4,6 @@ public record CentralLoginContextResponse(
 		String clientId,
 		String clientName,
 		String redirectUri,
-		String state) {
+		String state,
+		String loginState) {
 }

@@ -18,20 +18,21 @@ export type CentralLoginContext = {
   clientName: string
   redirectUri: string
   state: string | null
+  loginState: string
 }
 
 export type CentralLoginRequestContext = {
   clientId: string
   redirectUri: string
   state?: string | null
+  loginState?: string | null
 }
 
 export type CentralLoginRedirectResponse = {
   redirectUri: string
   code: string
   state: string | null
+  redirectUrl: string
 }
 
-export type CentralLoginResponse = CentralLoginRedirectResponse & {
-  auth: AuthResponse
-}
+export type CentralLoginResponse = CentralLoginRedirectResponse

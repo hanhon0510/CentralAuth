@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.centralauth.auth.dto.AuthResponse;
+import com.centralauth.auth.dto.CentralLoginTokenResponse;
 import com.centralauth.auth.dto.ForgotPasswordRequest;
 import com.centralauth.auth.dto.LogoutRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpRequest;
@@ -141,6 +142,25 @@ public class AuthService {
 
 	@Transactional
 	public AuthResponse signin(SigninRequest request, String clientIp) {
+		return toAuthResponse(authenticateUser(request, clientIp));
+	}
+
+	@Transactional
+	public UserResponse authenticateForCentralLogin(SigninRequest request, String clientIp) {
+		return UserResponse.from(authenticateUser(request, clientIp));
+	}
+
+	@Transactional
+	public CentralLoginTokenResponse issueClientTokenForUser(String userId, String clientId) {
+		User user = userMapper.findById(userId)
+				.filter(this::activeAccount)
+				.orElseThrow(InvalidCredentialsException::new);
+		return new CentralLoginTokenResponse(
+				jwtService.createClientToken(user, clientId),
+				UserResponse.from(user));
+	}
+
+	private User authenticateUser(SigninRequest request, String clientIp) {
 		String email = normalizeEmail(request.email());
 		try {
 			loginAttemptService.recordAttempt(email, clientIp);
@@ -166,13 +186,12 @@ public class AuthService {
 		}
 
 		loginAttemptService.recordSuccess(email, clientIp);
-		AuthResponse response = toAuthResponse(user);
 		eventPublisher.publishEvent(new LoginSucceededEvent(
 				user.id(),
 				user.email(),
 				clientIp,
 				Instant.now()));
-		return response;
+		return user;
 	}
 
 	@Transactional
