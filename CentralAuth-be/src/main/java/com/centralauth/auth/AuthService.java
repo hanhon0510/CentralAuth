@@ -146,11 +146,6 @@ public class AuthService {
 	}
 
 	@Transactional
-	public UserResponse authenticateForCentralLogin(SigninRequest request, String clientIp) {
-		return UserResponse.from(authenticateUser(request, clientIp));
-	}
-
-	@Transactional
 	public CentralLoginTokenResponse issueClientTokenForUser(String userId, String clientId) {
 		User user = userMapper.findById(userId)
 				.filter(this::activeAccount)

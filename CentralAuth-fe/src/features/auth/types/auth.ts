@@ -35,4 +35,6 @@ export type CentralLoginRedirectResponse = {
   redirectUrl: string
 }
 
-export type CentralLoginResponse = CentralLoginRedirectResponse
+export type CentralLoginResponse = CentralLoginRedirectResponse & {
+  auth: AuthResponse
+}

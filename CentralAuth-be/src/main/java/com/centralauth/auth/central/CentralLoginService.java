@@ -5,6 +5,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.centralauth.auth.AuthService;
+import com.centralauth.auth.dto.AuthResponse;
 import com.centralauth.auth.dto.AuthorizationCodeExchangeRequest;
 import com.centralauth.auth.dto.CentralLoginContextResponse;
 import com.centralauth.auth.dto.CentralLoginContinueRequest;
@@ -59,19 +60,20 @@ public class CentralLoginService {
 				request.clientId(),
 				request.redirectUri(),
 				request.state());
-		UserResponse user = authService.authenticateForCentralLogin(
+		AuthResponse auth = authService.signin(
 				new SigninRequest(request.email(), request.password()),
 				clientIp);
 		centralLoginStateService.consumeState(request.loginState(), context);
 		String code = authorizationCodeService.issueCode(
-				user.id(),
+				auth.user().id(),
 				context.clientId(),
 				context.redirectUri());
 		return new CentralLoginResponse(
 				context.redirectUri(),
 				code,
 				context.clientState(),
-				redirectUrl(context.redirectUri(), code, context.clientState()));
+				redirectUrl(context.redirectUri(), code, context.clientState()),
+				auth);
 	}
 
 	@Transactional

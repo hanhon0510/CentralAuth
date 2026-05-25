@@ -86,6 +86,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
         state: context.state ?? undefined,
         loginState: context.loginState ?? undefined,
       })
+      storeSession(response.auth)
       return response
     } finally {
       setLoading(false)

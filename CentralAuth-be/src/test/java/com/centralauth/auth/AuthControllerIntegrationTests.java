@@ -364,7 +364,9 @@ class AuthControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.code", not(blankOrNullString())))
 				.andExpect(jsonPath("$.data.state").value("state-after-login"))
 				.andExpect(jsonPath("$.data.redirectUrl", not(blankOrNullString())))
-				.andExpect(jsonPath("$.data.auth").doesNotExist())
+				.andExpect(jsonPath("$.data.auth.token", not(blankOrNullString())))
+				.andExpect(jsonPath("$.data.auth.refreshToken", not(blankOrNullString())))
+				.andExpect(jsonPath("$.data.auth.user.email").value(email))
 				.andReturn();
 
 		String code = stringFieldFrom(result, "code");
@@ -378,6 +380,72 @@ class AuthControllerIntegrationTests {
 				redirectUri);
 		verify(valueOperations).get("auth_state:" + loginState);
 		verify(valueOperations).getAndDelete("auth_state:" + loginState);
+	}
+
+	@Test
+	void centralLoginSigninIssuesCentralSessionThatCanContinueSecondClientFlow() throws Exception {
+		String email = "central-sso@example.com";
+		String firstRedirectUri = "https://projects.example.com/auth/callback";
+		String secondRedirectUri = "https://reports.example.com/auth/callback";
+		signupAndVerify(email);
+		insertClient("projects-client", "Projects Client", firstRedirectUri);
+		insertClient("reports-client", "Reports Client", secondRedirectUri);
+		String firstLoginState = issueCentralLoginState("projects-client", firstRedirectUri, "projects-state");
+		clearInvocations(valueOperations, redisTemplate, kafkaTemplate);
+
+		MvcResult firstLogin = mockMvc().perform(post("/api/v1/auth/central-login")
+						.header("X-Forwarded-For", "203.0.113.84")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "email":"%s",
+								  "password":"Password123!",
+								  "clientId":"projects-client",
+								  "redirectUri":"%s",
+								  "state":"projects-state",
+								  "loginState":"%s"
+								}
+								""".formatted(email, firstRedirectUri, firstLoginState)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.auth.token", not(blankOrNullString())))
+				.andExpect(jsonPath("$.data.auth.refreshToken", not(blankOrNullString())))
+				.andReturn();
+		String centralSessionToken = stringFieldFrom(firstLogin, "token");
+
+		String secondLoginState = issueCentralLoginState("reports-client", secondRedirectUri, "reports-state");
+		clearInvocations(valueOperations, redisTemplate, kafkaTemplate);
+
+		MvcResult secondLogin = mockMvc().perform(post("/api/v1/auth/central-login/continue")
+						.header("Authorization", "Bearer " + centralSessionToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "clientId":"reports-client",
+								  "redirectUri":"%s",
+								  "state":"reports-state",
+								  "loginState":"%s"
+								}
+								""".formatted(secondRedirectUri, secondLoginState)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Central login successful"))
+				.andExpect(jsonPath("$.data.redirectUri").value(secondRedirectUri))
+				.andExpect(jsonPath("$.data.code", not(blankOrNullString())))
+				.andExpect(jsonPath("$.data.state").value("reports-state"))
+				.andExpect(jsonPath("$.data.redirectUrl", not(blankOrNullString())))
+				.andReturn();
+
+		String secondCode = stringFieldFrom(secondLogin, "code");
+		assertThat(stringFieldFrom(secondLogin, "redirectUrl"))
+				.startsWith(secondRedirectUri + "?code=" + secondCode)
+				.contains("state=reports-state");
+		captureCentralLoginCodeContext(
+				secondCode,
+				email,
+				"reports-client",
+				secondRedirectUri);
+		verify(valueOperations).get("auth_state:" + secondLoginState);
+		verify(valueOperations).getAndDelete("auth_state:" + secondLoginState);
 	}
 
 	@Test
