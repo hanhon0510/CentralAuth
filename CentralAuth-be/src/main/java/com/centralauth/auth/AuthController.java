@@ -3,6 +3,7 @@ package com.centralauth.auth;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -128,19 +129,30 @@ public class AuthController {
 	}
 
 	@PostMapping("/logout")
-	public ApiResponse<Void> logout(Authentication authentication, @Valid @RequestBody LogoutRequest request) {
-		authService.logout((String) authentication.getPrincipal(), request);
+	public ApiResponse<Void> logout(
+			Authentication authentication,
+			HttpServletRequest httpRequest,
+			@Valid @RequestBody LogoutRequest request) {
+		authService.logout((String) authentication.getPrincipal(), bearerToken(httpRequest), request);
 		return ApiResponse.success(messages.get("auth.logout.success"), null);
 	}
 
 	@PostMapping("/logout-all-devices")
-	public ApiResponse<Void> logoutAllDevices(Authentication authentication) {
-		authService.logoutAllDevices((String) authentication.getPrincipal());
+	public ApiResponse<Void> logoutAllDevices(Authentication authentication, HttpServletRequest httpRequest) {
+		authService.logoutAllDevices((String) authentication.getPrincipal(), bearerToken(httpRequest));
 		return ApiResponse.success(messages.get("auth.logoutAllDevices.success"), null);
 	}
 
 	@GetMapping("/me")
 	public ApiResponse<UserResponse> me(Authentication authentication) {
 		return ApiResponse.success(messages.get("auth.currentUser"), authService.currentUser((String) authentication.getPrincipal()));
+	}
+
+	private String bearerToken(HttpServletRequest request) {
+		String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
+		if (authorization == null || !authorization.startsWith("Bearer ")) {
+			return null;
+		}
+		return authorization.substring(7);
 	}
 }

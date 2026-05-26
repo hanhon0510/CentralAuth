@@ -34,7 +34,11 @@ class JwtAuthenticationFilterTests {
 			"central-auth-test",
 			3600);
 	private final UserMapper userMapper = mock(UserMapper.class);
-	private final JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtService, userMapper);
+	private final AccessTokenRevocationService accessTokenRevocationService = mock(AccessTokenRevocationService.class);
+	private final JwtAuthenticationFilter filter = new JwtAuthenticationFilter(
+			jwtService,
+			userMapper,
+			accessTokenRevocationService);
 
 	@AfterEach
 	void clearSecurityContext() {

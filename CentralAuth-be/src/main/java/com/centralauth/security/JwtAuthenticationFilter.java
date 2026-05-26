@@ -22,10 +22,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 	private final JwtService jwtService;
 	private final UserMapper userMapper;
+	private final AccessTokenRevocationService accessTokenRevocationService;
 
-	public JwtAuthenticationFilter(JwtService jwtService, UserMapper userMapper) {
+	public JwtAuthenticationFilter(
+			JwtService jwtService,
+			UserMapper userMapper,
+			AccessTokenRevocationService accessTokenRevocationService) {
 		this.jwtService = jwtService;
 		this.userMapper = userMapper;
+		this.accessTokenRevocationService = accessTokenRevocationService;
 	}
 
 	@Override
@@ -37,8 +42,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			return;
 		}
 
-		jwtService.validate(authorization.substring(7))
+		String token = authorization.substring(7);
+		jwtService.validate(token)
 				.filter(JwtPrincipal::centralAuthAccessToken)
+				.filter(principal -> !accessTokenRevocationService.isRevoked(token, principal))
 				.filter(this::hasActiveAccount)
 				.ifPresentOrElse(
 						principal -> SecurityContextHolder.getContext().setAuthentication(authentication(principal)),

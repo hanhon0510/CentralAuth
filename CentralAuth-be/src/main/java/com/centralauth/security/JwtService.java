@@ -105,7 +105,9 @@ public class JwtService {
 			if (JwtPrincipal.CLIENT_ACCESS.equals(tokenUse) && (audience == null || audience.isBlank())) {
 				return Optional.empty();
 			}
-			return Optional.of(new JwtPrincipal(userId, email, rolesClaim(claims), tokenUse, audience));
+			long issuedAt = numberClaim(claims, "iat");
+			long expiresAt = numberClaim(claims, "exp");
+			return Optional.of(new JwtPrincipal(userId, email, rolesClaim(claims), tokenUse, audience, issuedAt, expiresAt));
 		}
 		catch (RuntimeException | java.io.IOException ex) {
 			return Optional.empty();

@@ -3,6 +3,7 @@ package com.centralauth.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.blankOrNullString;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.matches;
@@ -1174,6 +1175,38 @@ class AuthControllerIntegrationTests {
 	}
 
 	@Test
+	void logoutBlacklistsCurrentCentralAccessTokenUntilExpiry() throws Exception {
+		String email = "logout-blacklist@example.com";
+		signupAndVerify(email);
+		MvcResult signin = signin(email, "Password123!");
+		String accessToken = tokenFrom(signin);
+		String refreshToken = refreshTokenFrom(signin);
+		clearInvocations(valueOperations, redisTemplate, kafkaTemplate);
+
+		mockMvc().perform(post("/api/v1/auth/logout")
+						.header("Authorization", "Bearer " + accessToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"refreshToken":"%s"}
+								""".formatted(refreshToken)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true));
+
+		ArgumentCaptor<String> blacklistKeyCaptor = ArgumentCaptor.forClass(String.class);
+		ArgumentCaptor<Duration> ttlCaptor = ArgumentCaptor.forClass(Duration.class);
+		verify(valueOperations).set(blacklistKeyCaptor.capture(), eq("1"), ttlCaptor.capture());
+		assertThat(blacklistKeyCaptor.getValue()).startsWith("jwt:blacklist:");
+		assertThat(ttlCaptor.getValue()).isGreaterThan(Duration.ZERO);
+		when(redisTemplate.hasKey(blacklistKeyCaptor.getValue())).thenReturn(true);
+
+		mockMvc().perform(get("/api/v1/auth/me")
+						.header("Authorization", "Bearer " + accessToken))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Unauthorized"));
+	}
+
+	@Test
 	void logoutAllDevicesRevokesOnlyAuthenticatedUsersActiveRefreshTokens() throws Exception {
 		signupAndVerify("logout-all@example.com");
 		signupAndVerify("logout-all-other@example.com");
@@ -1191,6 +1224,37 @@ class AuthControllerIntegrationTests {
 
 		assertThat(activeRefreshTokenCount("logout-all@example.com")).isZero();
 		assertThat(activeRefreshTokenCount("logout-all-other@example.com")).isEqualTo(otherUsersActiveTokens);
+	}
+
+	@Test
+	void logoutAllDevicesRejectsPreviouslyIssuedCentralAccessTokens() throws Exception {
+		String email = "logout-all-cutoff@example.com";
+		signupAndVerify(email);
+		MvcResult firstSignin = signin(email, "Password123!");
+		MvcResult secondSignin = signin(email, "Password123!");
+		String firstAccessToken = tokenFrom(firstSignin);
+		String secondAccessToken = tokenFrom(secondSignin);
+		String userId = userIdFor(email);
+		clearInvocations(valueOperations, redisTemplate, kafkaTemplate);
+
+		mockMvc().perform(post("/api/v1/auth/logout-all-devices")
+						.header("Authorization", "Bearer " + firstAccessToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true));
+
+		ArgumentCaptor<String> cutoffCaptor = ArgumentCaptor.forClass(String.class);
+		verify(valueOperations).set(
+				eq("jwt:user-logout-after:" + userId),
+				cutoffCaptor.capture(),
+				any(Duration.class));
+		assertThat(cutoffCaptor.getValue()).matches("\\d+");
+		when(valueOperations.get("jwt:user-logout-after:" + userId)).thenReturn(cutoffCaptor.getValue());
+
+		mockMvc().perform(get("/api/v1/auth/me")
+						.header("Authorization", "Bearer " + secondAccessToken))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Unauthorized"));
 	}
 
 	@Test

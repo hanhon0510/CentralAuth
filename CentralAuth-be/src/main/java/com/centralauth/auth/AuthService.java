@@ -37,6 +37,8 @@ import com.centralauth.event.auth.LoginSucceededEvent;
 import com.centralauth.event.auth.UserRegisteredEvent;
 import com.centralauth.event.auth.UserLoggedOutEvent;
 import com.centralauth.event.auth.UserVerifiedEvent;
+import com.centralauth.security.AccessTokenRevocationService;
+import com.centralauth.security.JwtPrincipal;
 import com.centralauth.security.JwtService;
 import com.centralauth.user.AccountStatus;
 import com.centralauth.user.User;
@@ -55,6 +57,7 @@ public class AuthService {
 	private final LoginAttemptService loginAttemptService;
 	private final PasswordResetService passwordResetService;
 	private final ApplicationEventPublisher eventPublisher;
+	private final AccessTokenRevocationService accessTokenRevocationService;
 
 	public AuthService(
 			UserMapper userMapper,
@@ -64,7 +67,8 @@ public class AuthService {
 			RefreshTokenService refreshTokenService,
 			LoginAttemptService loginAttemptService,
 			PasswordResetService passwordResetService,
-			ApplicationEventPublisher eventPublisher) {
+			ApplicationEventPublisher eventPublisher,
+			AccessTokenRevocationService accessTokenRevocationService) {
 		this.userMapper = userMapper;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtService = jwtService;
@@ -73,6 +77,7 @@ public class AuthService {
 		this.loginAttemptService = loginAttemptService;
 		this.passwordResetService = passwordResetService;
 		this.eventPublisher = eventPublisher;
+		this.accessTokenRevocationService = accessTokenRevocationService;
 	}
 
 	@Transactional
@@ -190,14 +195,17 @@ public class AuthService {
 	}
 
 	@Transactional
-	public void logout(String userId, LogoutRequest request) {
+	public void logout(String userId, String accessToken, LogoutRequest request) {
 		refreshTokenService.revokeRefreshToken(userId, request.refreshToken());
+		revokeCurrentCentralAccessToken(userId, accessToken);
 		eventPublisher.publishEvent(new UserLoggedOutEvent(userId, false, Instant.now()));
 	}
 
 	@Transactional
-	public void logoutAllDevices(String userId) {
+	public void logoutAllDevices(String userId, String accessToken) {
 		refreshTokenService.revokeAllActiveRefreshTokens(userId);
+		revokeCurrentCentralAccessToken(userId, accessToken);
+		accessTokenRevocationService.revokeTokensIssuedAtOrBefore(userId, Instant.now());
 		eventPublisher.publishEvent(new UserLoggedOutEvent(userId, true, Instant.now()));
 	}
 
@@ -225,6 +233,18 @@ public class AuthService {
 
 	private void publishLoginFailed(String email, String clientIp, String reason) {
 		eventPublisher.publishEvent(new LoginFailedEvent(email, clientIp, reason, Instant.now()));
+	}
+
+	private void revokeCurrentCentralAccessToken(String userId, String accessToken) {
+		if (accessToken == null || accessToken.isBlank()) {
+			return;
+		}
+		jwtService.validate(accessToken)
+				.filter(JwtPrincipal::centralAuthAccessToken)
+				.filter(principal -> userId.equals(principal.userId()))
+				.ifPresent(principal -> accessTokenRevocationService.revokeToken(
+						accessToken,
+						principal.expiresAtEpochSecond()));
 	}
 
 	private boolean activeAccount(User user) {
