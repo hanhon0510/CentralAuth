@@ -24,6 +24,7 @@ class ClientApplicationServiceTests {
 				" Dashboard App ",
 				List.of(" https://dashboard.example.com/auth/callback "),
 				List.of(" https://dashboard.example.com "),
+				List.of(" https://dashboard.example.com/logout "),
 				true);
 
 		assertThat(created.clientId()).isEqualTo("dashboard-app");
@@ -31,12 +32,14 @@ class ClientApplicationServiceTests {
 		assertThat(created.active()).isTrue();
 		assertThat(created.redirectUris()).containsExactly("https://dashboard.example.com/auth/callback");
 		assertThat(created.allowedOrigins()).containsExactly("https://dashboard.example.com");
+		assertThat(created.logoutUris()).containsExactly("https://dashboard.example.com/logout");
 
 		assertThatThrownBy(() -> service.createClient(
 				"dashboard-app",
 				"Duplicate",
 				List.of("https://dashboard.example.com/other"),
 				List.of("https://dashboard.example.com"),
+				List.of("https://dashboard.example.com/logout"),
 				true))
 				.isInstanceOf(DuplicateClientApplicationException.class);
 	}
@@ -50,6 +53,7 @@ class ClientApplicationServiceTests {
 				"Bad Fragment",
 				List.of("https://app.example.com/callback#token"),
 				List.of("https://app.example.com"),
+				List.of("https://app.example.com/logout"),
 				true))
 				.isInstanceOf(InvalidClientMetadataException.class);
 
@@ -58,6 +62,7 @@ class ClientApplicationServiceTests {
 				"Bad Relative",
 				List.of("/callback"),
 				List.of("https://app.example.com"),
+				List.of("https://app.example.com/logout"),
 				true))
 				.isInstanceOf(InvalidClientMetadataException.class);
 
@@ -66,6 +71,7 @@ class ClientApplicationServiceTests {
 				"Bad Scheme",
 				List.of("javascript:alert(1)"),
 				List.of("https://app.example.com"),
+				List.of("https://app.example.com/logout"),
 				true))
 				.isInstanceOf(InvalidClientMetadataException.class);
 	}
@@ -79,6 +85,7 @@ class ClientApplicationServiceTests {
 				"Bad Origin Path",
 				List.of("https://app.example.com/callback"),
 				List.of("https://app.example.com/path"),
+				List.of("https://app.example.com/logout"),
 				true))
 				.isInstanceOf(InvalidClientMetadataException.class);
 
@@ -87,6 +94,30 @@ class ClientApplicationServiceTests {
 				"Bad Origin Wildcard",
 				List.of("https://app.example.com/callback"),
 				List.of("https://*.example.com"),
+				List.of("https://app.example.com/logout"),
+				true))
+				.isInstanceOf(InvalidClientMetadataException.class);
+	}
+
+	@Test
+	void createClientRejectsInvalidLogoutUris() {
+		ClientApplicationService service = new ClientApplicationService(new FakeClientApplicationMapper());
+
+		assertThatThrownBy(() -> service.createClient(
+				"bad-logout-fragment",
+				"Bad Logout Fragment",
+				List.of("https://app.example.com/callback"),
+				List.of("https://app.example.com"),
+				List.of("https://app.example.com/logout#done"),
+				true))
+				.isInstanceOf(InvalidClientMetadataException.class);
+
+		assertThatThrownBy(() -> service.createClient(
+				"bad-logout-scheme",
+				"Bad Logout Scheme",
+				List.of("https://app.example.com/callback"),
+				List.of("https://app.example.com"),
+				List.of("javascript:alert(1)"),
 				true))
 				.isInstanceOf(InvalidClientMetadataException.class);
 	}
@@ -100,6 +131,7 @@ class ClientApplicationServiceTests {
 				"Duplicate Redirect",
 				List.of("https://app.example.com/callback", " https://app.example.com/callback "),
 				List.of("https://app.example.com"),
+				List.of("https://app.example.com/logout"),
 				true))
 				.isInstanceOf(InvalidClientMetadataException.class);
 
@@ -108,6 +140,16 @@ class ClientApplicationServiceTests {
 				"Duplicate Origin",
 				List.of("https://app.example.com/callback"),
 				List.of("https://app.example.com", " https://app.example.com "),
+				List.of("https://app.example.com/logout"),
+				true))
+				.isInstanceOf(InvalidClientMetadataException.class);
+
+		assertThatThrownBy(() -> service.createClient(
+				"duplicate-logout",
+				"Duplicate Logout",
+				List.of("https://app.example.com/callback"),
+				List.of("https://app.example.com"),
+				List.of("https://app.example.com/logout", " https://app.example.com/logout "),
 				true))
 				.isInstanceOf(InvalidClientMetadataException.class);
 	}
@@ -121,12 +163,14 @@ class ClientApplicationServiceTests {
 				"Dashboard App",
 				List.of("https://dashboard.example.com/auth/callback"),
 				List.of("https://dashboard.example.com"),
+				List.of("https://dashboard.example.com/logout"),
 				true);
 		service.createClient(
 				"inactive-app",
 				"Inactive App",
 				List.of("https://inactive.example.com/callback"),
 				List.of("https://inactive.example.com"),
+				List.of("https://inactive.example.com/logout"),
 				false);
 
 		assertThat(service.requireActiveClientForRedirect(
@@ -157,6 +201,7 @@ class ClientApplicationServiceTests {
 				"Dashboard App",
 				List.of("https://dashboard.example.com/auth/callback"),
 				List.of("https://dashboard.example.com"),
+				List.of("https://dashboard.example.com/logout"),
 				true);
 
 		ClientApplication updated = service.updateClient(
@@ -164,18 +209,21 @@ class ClientApplicationServiceTests {
 				"Dashboard Console",
 				List.of("https://console.example.com/callback"),
 				List.of("https://console.example.com"),
+				List.of("https://console.example.com/logout"),
 				false);
 
 		assertThat(updated.clientName()).isEqualTo("Dashboard Console");
 		assertThat(updated.active()).isFalse();
 		assertThat(updated.redirectUris()).containsExactly("https://console.example.com/callback");
 		assertThat(updated.allowedOrigins()).containsExactly("https://console.example.com");
+		assertThat(updated.logoutUris()).containsExactly("https://console.example.com/logout");
 
 		assertThatThrownBy(() -> service.updateClient(
 				"missing-app",
 				"Missing",
 				List.of("https://missing.example.com/callback"),
 				List.of("https://missing.example.com"),
+				List.of("https://missing.example.com/logout"),
 				true))
 				.isInstanceOf(ClientApplicationNotFoundException.class);
 	}
@@ -189,11 +237,37 @@ class ClientApplicationServiceTests {
 				"Dashboard App",
 				List.of("https://dashboard.example.com/auth/callback"),
 				List.of("https://dashboard.example.com"),
+				List.of("https://dashboard.example.com/logout"),
 				true);
 
 		assertThat(service.updateActive("dashboard-app", false).active()).isFalse();
 		assertThatThrownBy(() -> service.updateActive("missing-app", false))
 				.isInstanceOf(ClientApplicationNotFoundException.class);
+	}
+
+	@Test
+	void activeClientExistsReturnsFalseForMissingInactiveAndInvalidClientIds() {
+		FakeClientApplicationMapper mapper = new FakeClientApplicationMapper();
+		ClientApplicationService service = new ClientApplicationService(mapper);
+		service.createClient(
+				"active-app",
+				"Active App",
+				List.of("https://active.example.com/callback"),
+				List.of("https://active.example.com"),
+				List.of("https://active.example.com/logout"),
+				true);
+		service.createClient(
+				"inactive-app",
+				"Inactive App",
+				List.of("https://inactive.example.com/callback"),
+				List.of("https://inactive.example.com"),
+				List.of("https://inactive.example.com/logout"),
+				false);
+
+		assertThat(service.activeClientExists("active-app")).isTrue();
+		assertThat(service.activeClientExists("inactive-app")).isFalse();
+		assertThat(service.activeClientExists("missing-app")).isFalse();
+		assertThat(service.activeClientExists("bad client id")).isFalse();
 	}
 
 	private static final class FakeClientApplicationMapper implements ClientApplicationMapper {
@@ -208,6 +282,7 @@ class ClientApplicationServiceTests {
 					clientApplication.active(),
 					Instant.now(),
 					Instant.now(),
+					new ArrayList<>(),
 					new ArrayList<>(),
 					new ArrayList<>()));
 		}
@@ -243,6 +318,16 @@ class ClientApplicationServiceTests {
 		}
 
 		@Override
+		public void insertLogoutUri(String clientId, String logoutUri) {
+			clients.get(clientId).logoutUris().add(logoutUri);
+		}
+
+		@Override
+		public void deleteLogoutUris(String clientId) {
+			clients.get(clientId).logoutUris().clear();
+		}
+
+		@Override
 		public int updateClient(String clientId, String clientName, boolean active) {
 			StoredClient current = clients.get(clientId);
 			if (current == null) {
@@ -271,7 +356,8 @@ class ClientApplicationServiceTests {
 			Instant createdAt,
 			Instant updatedAt,
 			List<String> redirectUris,
-			List<String> allowedOrigins) {
+			List<String> allowedOrigins,
+			List<String> logoutUris) {
 
 		ClientApplication toClientApplication() {
 			return new ClientApplication(
@@ -281,7 +367,8 @@ class ClientApplicationServiceTests {
 					createdAt,
 					updatedAt,
 					List.copyOf(redirectUris),
-					List.copyOf(allowedOrigins));
+					List.copyOf(allowedOrigins),
+					List.copyOf(logoutUris));
 		}
 
 		StoredClient withMetadata(String nextClientName, boolean nextActive) {
@@ -292,7 +379,8 @@ class ClientApplicationServiceTests {
 					createdAt,
 					Instant.now(),
 					new ArrayList<>(redirectUris),
-					new ArrayList<>(allowedOrigins));
+					new ArrayList<>(allowedOrigins),
+					new ArrayList<>(logoutUris));
 		}
 	}
 }

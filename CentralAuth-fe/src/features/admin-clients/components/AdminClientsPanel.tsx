@@ -16,6 +16,7 @@ type AdminClientFormValues = {
   allowedOriginsText: string
   clientId?: string
   clientName: string
+  logoutUrisText: string
   redirectUrisText: string
 }
 
@@ -76,6 +77,7 @@ export function AdminClientsPanel({ token }: AdminClientsPanelProps) {
       allowedOriginsText: '',
       clientId: '',
       clientName: '',
+      logoutUrisText: '',
       redirectUrisText: '',
     })
     setModalOpen(true)
@@ -89,6 +91,7 @@ export function AdminClientsPanel({ token }: AdminClientsPanelProps) {
       allowedOriginsText: client.allowedOrigins.join('\n'),
       clientId: client.clientId,
       clientName: client.clientName,
+      logoutUrisText: client.logoutUris.join('\n'),
       redirectUrisText: client.redirectUris.join('\n'),
     })
     setModalOpen(true)
@@ -97,6 +100,7 @@ export function AdminClientsPanel({ token }: AdminClientsPanelProps) {
   async function handleSave(values: AdminClientFormValues) {
     const redirectUris = parseLines(values.redirectUrisText)
     const allowedOrigins = parseLines(values.allowedOriginsText)
+    const logoutUris = parseLines(values.logoutUrisText)
 
     if (redirectUris.length === 0) {
       form.setFields([{ name: 'redirectUrisText', errors: [t('adminClients.validation.redirectUris.required')] }])
@@ -118,6 +122,11 @@ export function AdminClientsPanel({ token }: AdminClientsPanelProps) {
       return
     }
 
+    if (hasDuplicateLines(logoutUris)) {
+      form.setFields([{ name: 'logoutUrisText', errors: [t('adminClients.validation.duplicateLogoutUris')] }])
+      return
+    }
+
     setSaving(true)
     setError('')
     try {
@@ -125,6 +134,7 @@ export function AdminClientsPanel({ token }: AdminClientsPanelProps) {
         active: values.active,
         allowedOrigins,
         clientName: values.clientName.trim(),
+        logoutUris,
         redirectUris,
       }
       const savedClient = editingClient
@@ -202,6 +212,13 @@ export function AdminClientsPanel({ token }: AdminClientsPanelProps) {
       render: (values: string[]) => <MetadataList values={values} />,
     },
     {
+      title: t('adminClients.logoutUris'),
+      dataIndex: 'logoutUris',
+      key: 'logoutUris',
+      width: 360,
+      render: (values: string[]) => <MetadataList values={values} />,
+    },
+    {
       title: t('adminClients.createdAt'),
       dataIndex: 'createdAt',
       key: 'createdAt',
@@ -244,7 +261,7 @@ export function AdminClientsPanel({ token }: AdminClientsPanelProps) {
           columns={columns}
           dataSource={clients}
           pagination={{ pageSize: 10, showSizeChanger: false }}
-          scroll={{ x: 1560 }}
+          scroll={{ x: 1920 }}
           title={() => (
             <Space>
               <AppstoreAddOutlined />
@@ -302,6 +319,14 @@ export function AdminClientsPanel({ token }: AdminClientsPanelProps) {
             <Input.TextArea
               className="admin-clients-textarea"
               placeholder={t('adminClients.allowedOriginsPlaceholder')}
+              autoSize={{ minRows: 2, maxRows: 5 }}
+            />
+          </Form.Item>
+
+          <Form.Item name="logoutUrisText" label={t('adminClients.logoutUris')}>
+            <Input.TextArea
+              className="admin-clients-textarea"
+              placeholder={t('adminClients.logoutUrisPlaceholder')}
               autoSize={{ minRows: 2, maxRows: 5 }}
             />
           </Form.Item>

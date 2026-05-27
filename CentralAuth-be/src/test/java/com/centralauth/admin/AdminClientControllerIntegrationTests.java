@@ -82,6 +82,10 @@ class AdminClientControllerIntegrationTests {
 								    "https://dashboard.example.com",
 								    "http://localhost:5173"
 								  ],
+								  "logoutUris": [
+								    "https://dashboard.example.com/logout",
+								    "http://localhost:5173/logout"
+								  ],
 								  "active": true
 								}
 								"""))
@@ -97,14 +101,20 @@ class AdminClientControllerIntegrationTests {
 						"http://localhost:5173/auth/callback")))
 				.andExpect(jsonPath("$.data.allowedOrigins[*]", containsInAnyOrder(
 						"https://dashboard.example.com",
-						"http://localhost:5173")));
+						"http://localhost:5173")))
+				.andExpect(jsonPath("$.data.logoutUris[*]", containsInAnyOrder(
+						"https://dashboard.example.com/logout",
+						"http://localhost:5173/logout")));
 
 		mockMvc().perform(get("/api/v1/admin/clients")
 						.header("Authorization", "Bearer " + adminToken()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.message").value("Clients"))
 				.andExpect(jsonPath("$.data.length()").value(1))
-				.andExpect(jsonPath("$.data[0].clientId").value("dashboard-app"));
+				.andExpect(jsonPath("$.data[0].clientId").value("dashboard-app"))
+				.andExpect(jsonPath("$.data[0].logoutUris[*]", containsInAnyOrder(
+						"https://dashboard.example.com/logout",
+						"http://localhost:5173/logout")));
 
 		mockMvc().perform(put("/api/v1/admin/clients/dashboard-app")
 						.header("Authorization", "Bearer " + adminToken())
@@ -114,6 +124,7 @@ class AdminClientControllerIntegrationTests {
 								  "clientName": "Dashboard Console",
 								  "redirectUris": ["https://console.example.com/callback"],
 								  "allowedOrigins": ["https://console.example.com"],
+								  "logoutUris": ["https://console.example.com/logout"],
 								  "active": false
 								}
 								"""))
@@ -123,7 +134,8 @@ class AdminClientControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.clientName").value("Dashboard Console"))
 				.andExpect(jsonPath("$.data.active").value(false))
 				.andExpect(jsonPath("$.data.redirectUris[0]").value("https://console.example.com/callback"))
-				.andExpect(jsonPath("$.data.allowedOrigins[0]").value("https://console.example.com"));
+				.andExpect(jsonPath("$.data.allowedOrigins[0]").value("https://console.example.com"))
+				.andExpect(jsonPath("$.data.logoutUris[0]").value("https://console.example.com/logout"));
 
 		mockMvc().perform(patch("/api/v1/admin/clients/dashboard-app/active")
 						.header("Authorization", "Bearer " + adminToken())
@@ -156,6 +168,7 @@ class AdminClientControllerIntegrationTests {
 								  "clientName": "Bad Client",
 								  "redirectUris": ["https://app.example.com/callback#fragment"],
 								  "allowedOrigins": ["https://app.example.com"],
+								  "logoutUris": ["https://app.example.com/logout"],
 								  "active": true
 								}
 								"""))
@@ -171,6 +184,7 @@ class AdminClientControllerIntegrationTests {
 								  "clientName": "Dashboard App",
 								  "redirectUris": ["https://dashboard.example.com/auth/callback"],
 								  "allowedOrigins": ["https://dashboard.example.com"],
+								  "logoutUris": ["https://dashboard.example.com/logout"],
 								  "active": true
 								}
 								"""))
@@ -181,10 +195,27 @@ class AdminClientControllerIntegrationTests {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{
+								  "clientId": "bad-logout",
+								  "clientName": "Bad Logout",
+								  "redirectUris": ["https://bad-logout.example.com/callback"],
+								  "allowedOrigins": ["https://bad-logout.example.com"],
+								  "logoutUris": ["https://bad-logout.example.com/logout#done"],
+								  "active": true
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value("Invalid client metadata"));
+
+		mockMvc().perform(post("/api/v1/admin/clients")
+						.header("Authorization", "Bearer " + adminToken())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
 								  "clientId": "dashboard-app",
 								  "clientName": "Duplicate Dashboard App",
 								  "redirectUris": ["https://dashboard.example.com/other"],
 								  "allowedOrigins": ["https://dashboard.example.com"],
+								  "logoutUris": ["https://dashboard.example.com/logout"],
 								  "active": true
 								}
 								"""))
@@ -207,6 +238,7 @@ class AdminClientControllerIntegrationTests {
 								  "clientName": "Dashboard App",
 								  "redirectUris": ["https://dashboard.example.com/auth/callback"],
 								  "allowedOrigins": ["https://dashboard.example.com"],
+								  "logoutUris": ["https://dashboard.example.com/logout"],
 								  "active": true
 								}
 								"""))

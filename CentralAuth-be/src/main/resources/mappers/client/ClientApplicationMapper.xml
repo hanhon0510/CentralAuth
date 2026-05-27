@@ -13,6 +13,7 @@
 			<arg column="updated_at" javaType="java.time.Instant"/>
 			<arg column="client_id" javaType="java.util.List" select="findRedirectUrisByClientId"/>
 			<arg column="client_id" javaType="java.util.List" select="findAllowedOriginsByClientId"/>
+			<arg column="client_id" javaType="java.util.List" select="findLogoutUrisByClientId"/>
 		</constructor>
 	</resultMap>
 
@@ -55,6 +56,13 @@
 		order by origin asc
 	</select>
 
+	<select id="findLogoutUrisByClientId" resultType="string">
+		select logout_uri
+		from client_logout_uris
+		where client_id = #{clientId}
+		order by logout_uri asc
+	</select>
+
 	<insert id="insertRedirectUri">
 		insert into client_redirect_uris (client_id, redirect_uri)
 		values (#{clientId}, #{redirectUri})
@@ -72,6 +80,16 @@
 
 	<delete id="deleteAllowedOrigins">
 		delete from client_allowed_origins
+		where client_id = #{clientId}
+	</delete>
+
+	<insert id="insertLogoutUri">
+		insert into client_logout_uris (client_id, logout_uri)
+		values (#{clientId}, #{logoutUri})
+	</insert>
+
+	<delete id="deleteLogoutUris">
+		delete from client_logout_uris
 		where client_id = #{clientId}
 	</delete>
 

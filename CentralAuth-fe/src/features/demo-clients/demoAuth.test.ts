@@ -3,6 +3,7 @@ import { demoClients } from './demoClients'
 import {
   callbackRedirectUri,
   centralLoginUrl,
+  clearClientSession,
   validateCallbackState,
 } from './demoAuth'
 
@@ -35,5 +36,21 @@ describe('demo auth helpers', () => {
     expect(validateCallbackState('state-123', 'state-456')).toBe(false)
     expect(validateCallbackState('', 'state-123')).toBe(false)
     expect(validateCallbackState('state-123', null)).toBe(false)
+  })
+
+  it('clears all client-side demo session storage', () => {
+    const storage = new Map<string, string>()
+    const demoStorage = {
+      getItem: (key: string) => storage.get(key) ?? null,
+      removeItem: (key: string) => storage.delete(key),
+      setItem: (key: string, value: string) => storage.set(key, value),
+    }
+    demoStorage.setItem(demoClients.projects.tokenStorageKey, 'token')
+    demoStorage.setItem(demoClients.projects.stateStorageKey, 'state')
+
+    clearClientSession(demoClients.projects, demoStorage)
+
+    expect(demoStorage.getItem(demoClients.projects.tokenStorageKey)).toBeNull()
+    expect(demoStorage.getItem(demoClients.projects.stateStorageKey)).toBeNull()
   })
 })

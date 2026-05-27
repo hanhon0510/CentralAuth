@@ -36,6 +36,8 @@ class DemoClientBootstrapServiceTests {
 		ArgumentCaptor<List<String>> redirectUrisCaptor = ArgumentCaptor.forClass(List.class);
 		@SuppressWarnings("unchecked")
 		ArgumentCaptor<List<String>> allowedOriginsCaptor = ArgumentCaptor.forClass(List.class);
+		@SuppressWarnings("unchecked")
+		ArgumentCaptor<List<String>> logoutUrisCaptor = ArgumentCaptor.forClass(List.class);
 		ArgumentCaptor<Boolean> activeCaptor = ArgumentCaptor.forClass(Boolean.class);
 
 		verify(clientApplicationService, times(2)).createClient(
@@ -43,6 +45,7 @@ class DemoClientBootstrapServiceTests {
 				clientNameCaptor.capture(),
 				redirectUrisCaptor.capture(),
 				allowedOriginsCaptor.capture(),
+				logoutUrisCaptor.capture(),
 				activeCaptor.capture());
 
 		assertThat(clientIdCaptor.getAllValues()).containsExactly("projects-demo", "reports-demo");
@@ -59,6 +62,14 @@ class DemoClientBootstrapServiceTests {
 						"http://127.0.0.1:5175/demo/reports/callback");
 		assertThat(allowedOriginsCaptor.getAllValues().get(0))
 				.contains("http://localhost:5173", "http://127.0.0.1:5175");
+		assertThat(logoutUrisCaptor.getAllValues().get(0))
+				.contains(
+						"http://localhost:5173/demo/projects/logout",
+						"http://127.0.0.1:5175/demo/projects/logout");
+		assertThat(logoutUrisCaptor.getAllValues().get(1))
+				.contains(
+						"http://localhost:5173/demo/reports/logout",
+						"http://127.0.0.1:5175/demo/reports/logout");
 	}
 
 	@Test
@@ -76,10 +87,12 @@ class DemoClientBootstrapServiceTests {
 				anyString(),
 				any(),
 				any(),
+				any(),
 				anyBoolean());
 		verify(clientApplicationService).createClient(
 				eq("reports-demo"),
 				eq("Reports Demo Client"),
+				any(),
 				any(),
 				any(),
 				eq(true));
@@ -105,6 +118,7 @@ class DemoClientBootstrapServiceTests {
 				Instant.now(),
 				Instant.now(),
 				List.of("https://projects.example.com/callback"),
-				List.of("https://projects.example.com"));
+				List.of("https://projects.example.com"),
+				List.of("https://projects.example.com/logout"));
 	}
 }

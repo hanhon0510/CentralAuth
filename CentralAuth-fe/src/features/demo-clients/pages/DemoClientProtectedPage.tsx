@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { getDemoClientUser } from '../api/demoClientAuthApi'
 import {
   centralLoginUrl,
+  clearClientSession,
   clearClientToken,
   generateCallbackState,
   readClientToken,
@@ -61,7 +62,7 @@ export function DemoClientProtectedPage({ client }: DemoClientProtectedPageProps
   }
 
   function handleLogout() {
-    clearClientToken(client)
+    clearClientSession(client)
     setToken('')
     setUser(null)
     setError('')

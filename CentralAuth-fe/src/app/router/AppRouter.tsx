@@ -5,6 +5,7 @@ import { ROUTES } from '../../shared/constants/routes'
 import { useAuthSession } from '../../features/auth/context/useAuthSession'
 import { demoClients } from '../../features/demo-clients/demoClients'
 import { DemoClientCallbackPage } from '../../features/demo-clients/pages/DemoClientCallbackPage'
+import { DemoClientLogoutPage } from '../../features/demo-clients/pages/DemoClientLogoutPage'
 import { DemoClientProtectedPage } from '../../features/demo-clients/pages/DemoClientProtectedPage'
 import { DemoClientPublicPage } from '../../features/demo-clients/pages/DemoClientPublicPage'
 
@@ -37,6 +38,10 @@ export function AppRouter() {
         element={<DemoClientCallbackPage client={demoClients.projects} />}
       />
       <Route
+        path={demoClients.projects.logoutPath}
+        element={<DemoClientLogoutPage client={demoClients.projects} />}
+      />
+      <Route
         path={demoClients.reports.publicPath}
         element={<DemoClientPublicPage client={demoClients.reports} />}
       />
@@ -47,6 +52,10 @@ export function AppRouter() {
       <Route
         path={demoClients.reports.callbackPath}
         element={<DemoClientCallbackPage client={demoClients.reports} />}
+      />
+      <Route
+        path={demoClients.reports.logoutPath}
+        element={<DemoClientLogoutPage client={demoClients.reports} />}
       />
       <Route path="*" element={<Navigate to={ROUTES.signin} replace />} />
     </Routes>

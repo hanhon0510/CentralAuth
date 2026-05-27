@@ -16,6 +16,7 @@ import { refreshTokenStorageKey, tokenStorageKey } from '../../../shared/constan
 import type { AuthResponse, CentralLoginRequestContext, User } from '../types/auth'
 import { AuthSessionStore } from './auth-session-store'
 import { rolesFromJwt } from '../../../shared/lib/jwt'
+import { propagateFrontChannelLogout } from '../lib/frontChannelLogout'
 
 export function AuthSessionProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(false)
@@ -148,7 +149,8 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
 
     setLoading(true)
     try {
-      await logout(token, refreshToken)
+      const response = await logout(token, refreshToken)
+      propagateFrontChannelLogout(response.logoutUris)
     } finally {
       clearSession()
       setLoading(false)
@@ -163,7 +165,8 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
 
     setLoading(true)
     try {
-      await logoutAllDevices(token)
+      const response = await logoutAllDevices(token)
+      propagateFrontChannelLogout(response.logoutUris)
     } finally {
       clearSession()
       setLoading(false)

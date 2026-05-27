@@ -8,12 +8,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.centralauth.client.ClientApplicationService;
 import com.centralauth.user.AccountStatus;
 import com.centralauth.user.UserMapper;
 
@@ -23,14 +25,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	private final JwtService jwtService;
 	private final UserMapper userMapper;
 	private final AccessTokenRevocationService accessTokenRevocationService;
+	private final ClientApplicationService clientApplicationService;
 
 	public JwtAuthenticationFilter(
 			JwtService jwtService,
 			UserMapper userMapper,
-			AccessTokenRevocationService accessTokenRevocationService) {
+			AccessTokenRevocationService accessTokenRevocationService,
+			ClientApplicationService clientApplicationService) {
 		this.jwtService = jwtService;
 		this.userMapper = userMapper;
 		this.accessTokenRevocationService = accessTokenRevocationService;
+		this.clientApplicationService = clientApplicationService;
 	}
 
 	@Override
@@ -44,14 +49,36 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 		String token = authorization.substring(7);
 		jwtService.validate(token)
-				.filter(JwtPrincipal::centralAuthAccessToken)
-				.filter(principal -> !accessTokenRevocationService.isRevoked(token, principal))
+				.filter(principal -> acceptsTokenForRequest(token, principal, request))
 				.filter(this::hasActiveAccount)
 				.ifPresentOrElse(
 						principal -> SecurityContextHolder.getContext().setAuthentication(authentication(principal)),
 						SecurityContextHolder::clearContext);
 
 		filterChain.doFilter(request, response);
+	}
+
+	private boolean acceptsTokenForRequest(String token, JwtPrincipal principal, HttpServletRequest request) {
+		if (accessTokenRevocationService.isRevoked(token, principal)) {
+			return false;
+		}
+		return principal.centralAuthAccessToken() || clientAccessTokenCanReadCurrentUser(principal, request);
+	}
+
+	private boolean clientAccessTokenCanReadCurrentUser(JwtPrincipal principal, HttpServletRequest request) {
+		return JwtPrincipal.CLIENT_ACCESS.equals(principal.tokenUse())
+				&& HttpMethod.GET.matches(request.getMethod())
+				&& "/api/v1/auth/me".equals(requestPath(request))
+				&& clientApplicationService.activeClientExists(principal.audience());
+	}
+
+	private String requestPath(HttpServletRequest request) {
+		String requestUri = request.getRequestURI();
+		String contextPath = request.getContextPath();
+		if (contextPath != null && !contextPath.isBlank() && requestUri.startsWith(contextPath)) {
+			return requestUri.substring(contextPath.length());
+		}
+		return requestUri;
 	}
 
 	private UsernamePasswordAuthenticationToken authentication(JwtPrincipal principal) {

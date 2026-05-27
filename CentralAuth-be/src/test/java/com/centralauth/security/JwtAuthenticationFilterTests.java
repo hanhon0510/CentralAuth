@@ -21,6 +21,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import com.centralauth.client.ClientApplicationService;
 import com.centralauth.user.AccountStatus;
 import com.centralauth.user.User;
 import com.centralauth.user.UserMapper;
@@ -35,10 +36,12 @@ class JwtAuthenticationFilterTests {
 			3600);
 	private final UserMapper userMapper = mock(UserMapper.class);
 	private final AccessTokenRevocationService accessTokenRevocationService = mock(AccessTokenRevocationService.class);
+	private final ClientApplicationService clientApplicationService = mock(ClientApplicationService.class);
 	private final JwtAuthenticationFilter filter = new JwtAuthenticationFilter(
 			jwtService,
 			userMapper,
-			accessTokenRevocationService);
+			accessTokenRevocationService,
+			clientApplicationService);
 
 	@AfterEach
 	void clearSecurityContext() {

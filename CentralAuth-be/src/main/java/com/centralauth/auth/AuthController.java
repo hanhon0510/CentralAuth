@@ -22,6 +22,7 @@ import com.centralauth.auth.dto.CentralLoginRequest;
 import com.centralauth.auth.dto.CentralLoginResponse;
 import com.centralauth.auth.dto.CentralLoginTokenResponse;
 import com.centralauth.auth.dto.ForgotPasswordRequest;
+import com.centralauth.auth.dto.LogoutResponse;
 import com.centralauth.auth.dto.LogoutRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpResponse;
@@ -129,18 +130,20 @@ public class AuthController {
 	}
 
 	@PostMapping("/logout")
-	public ApiResponse<Void> logout(
+	public ApiResponse<LogoutResponse> logout(
 			Authentication authentication,
 			HttpServletRequest httpRequest,
 			@Valid @RequestBody LogoutRequest request) {
-		authService.logout((String) authentication.getPrincipal(), bearerToken(httpRequest), request);
-		return ApiResponse.success(messages.get("auth.logout.success"), null);
+		return ApiResponse.success(
+				messages.get("auth.logout.success"),
+				authService.logout((String) authentication.getPrincipal(), bearerToken(httpRequest), request));
 	}
 
 	@PostMapping("/logout-all-devices")
-	public ApiResponse<Void> logoutAllDevices(Authentication authentication, HttpServletRequest httpRequest) {
-		authService.logoutAllDevices((String) authentication.getPrincipal(), bearerToken(httpRequest));
-		return ApiResponse.success(messages.get("auth.logoutAllDevices.success"), null);
+	public ApiResponse<LogoutResponse> logoutAllDevices(Authentication authentication, HttpServletRequest httpRequest) {
+		return ApiResponse.success(
+				messages.get("auth.logoutAllDevices.success"),
+				authService.logoutAllDevices((String) authentication.getPrincipal(), bearerToken(httpRequest)));
 	}
 
 	@GetMapping("/me")

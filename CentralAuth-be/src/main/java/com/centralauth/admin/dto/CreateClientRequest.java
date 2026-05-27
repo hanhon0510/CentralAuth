@@ -12,6 +12,7 @@ public record CreateClientRequest(
 		@NotBlank @Size(max = 255) String clientName,
 		@NotEmpty List<@NotBlank @Size(max = 2048) String> redirectUris,
 		@NotNull List<@NotBlank @Size(max = 512) String> allowedOrigins,
+		@NotNull List<@NotBlank @Size(max = 2048) String> logoutUris,
 		Boolean active
 ) {
 }

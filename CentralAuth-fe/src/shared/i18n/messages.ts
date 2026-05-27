@@ -92,6 +92,8 @@ export const messages = {
     'adminClients.redirectUrisPlaceholder': 'https://app.example.com/auth/callback',
     'adminClients.allowedOrigins': 'Allowed origins',
     'adminClients.allowedOriginsPlaceholder': 'https://app.example.com',
+    'adminClients.logoutUris': 'Logout URIs',
+    'adminClients.logoutUrisPlaceholder': 'https://app.example.com/logout',
     'adminClients.active': 'Active',
     'adminClients.inactive': 'Inactive',
     'adminClients.createdAt': 'Created',
@@ -102,6 +104,7 @@ export const messages = {
     'adminClients.validation.allowedOrigins.required': 'Enter at least one allowed origin',
     'adminClients.validation.duplicateRedirectUris': 'Redirect URIs must be unique',
     'adminClients.validation.duplicateOrigins': 'Allowed origins must be unique',
+    'adminClients.validation.duplicateLogoutUris': 'Logout URIs must be unique',
   },
   vi: {
     'common.requestFailed': 'Yêu cầu thất bại',
@@ -196,6 +199,8 @@ export const messages = {
     'adminClients.redirectUrisPlaceholder': 'https://app.example.com/auth/callback',
     'adminClients.allowedOrigins': 'Allowed origin',
     'adminClients.allowedOriginsPlaceholder': 'https://app.example.com',
+    'adminClients.logoutUris': 'Logout URI',
+    'adminClients.logoutUrisPlaceholder': 'https://app.example.com/logout',
     'adminClients.active': 'Đang hoạt động',
     'adminClients.inactive': 'Không hoạt động',
     'adminClients.createdAt': 'Ngày tạo',
@@ -206,6 +211,7 @@ export const messages = {
     'adminClients.validation.allowedOrigins.required': 'Nhập ít nhất một allowed origin',
     'adminClients.validation.duplicateRedirectUris': 'Redirect URI không được trùng lặp',
     'adminClients.validation.duplicateOrigins': 'Allowed origin không được trùng lặp',
+    'adminClients.validation.duplicateLogoutUris': 'Logout URI không được trùng lặp',
   },
 } as const
 

@@ -10,7 +10,8 @@ public record ClientApplication(
 		Instant createdAt,
 		Instant updatedAt,
 		List<String> redirectUris,
-		List<String> allowedOrigins
+		List<String> allowedOrigins,
+		List<String> logoutUris
 ) {
 
 	public ClientApplication(
@@ -20,7 +21,16 @@ public record ClientApplication(
 			Instant createdAt,
 			Instant updatedAt,
 			List<String> redirectUris,
-			List<String> allowedOrigins) {
-		this(clientId, clientName, Boolean.TRUE.equals(active), createdAt, updatedAt, redirectUris, allowedOrigins);
+			List<String> allowedOrigins,
+			List<String> logoutUris) {
+		this(
+				clientId,
+				clientName,
+				Boolean.TRUE.equals(active),
+				createdAt,
+				updatedAt,
+				redirectUris,
+				allowedOrigins,
+				logoutUris);
 	}
 }

@@ -10,6 +10,7 @@ public record AdminClientResponse(
 		String clientName,
 		List<String> redirectUris,
 		List<String> allowedOrigins,
+		List<String> logoutUris,
 		boolean active,
 		Instant createdAt,
 		Instant updatedAt
@@ -21,6 +22,7 @@ public record AdminClientResponse(
 				clientApplication.clientName(),
 				clientApplication.redirectUris(),
 				clientApplication.allowedOrigins(),
+				clientApplication.logoutUris(),
 				clientApplication.active(),
 				clientApplication.createdAt(),
 				clientApplication.updatedAt());

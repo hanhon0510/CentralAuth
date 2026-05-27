@@ -13,6 +13,10 @@ export type AuthResponse = {
   user: User
 }
 
+export type LogoutResponse = {
+  logoutUris: string[]
+}
+
 export type CentralLoginContext = {
   clientId: string
   clientName: string

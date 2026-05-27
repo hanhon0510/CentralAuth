@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.centralauth.auth.dto.AuthResponse;
 import com.centralauth.auth.dto.CentralLoginTokenResponse;
 import com.centralauth.auth.dto.ForgotPasswordRequest;
+import com.centralauth.auth.dto.LogoutResponse;
 import com.centralauth.auth.dto.LogoutRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpResponse;
@@ -32,6 +33,7 @@ import com.centralauth.auth.login.LoginTemporarilyLockedException;
 import com.centralauth.auth.password.PasswordResetService;
 import com.centralauth.auth.token.RefreshTokenService;
 import com.centralauth.auth.verification.EmailVerificationService;
+import com.centralauth.client.ClientApplicationService;
 import com.centralauth.event.auth.LoginFailedEvent;
 import com.centralauth.event.auth.LoginSucceededEvent;
 import com.centralauth.event.auth.UserRegisteredEvent;
@@ -58,6 +60,7 @@ public class AuthService {
 	private final PasswordResetService passwordResetService;
 	private final ApplicationEventPublisher eventPublisher;
 	private final AccessTokenRevocationService accessTokenRevocationService;
+	private final ClientApplicationService clientApplicationService;
 
 	public AuthService(
 			UserMapper userMapper,
@@ -68,7 +71,8 @@ public class AuthService {
 			LoginAttemptService loginAttemptService,
 			PasswordResetService passwordResetService,
 			ApplicationEventPublisher eventPublisher,
-			AccessTokenRevocationService accessTokenRevocationService) {
+			AccessTokenRevocationService accessTokenRevocationService,
+			ClientApplicationService clientApplicationService) {
 		this.userMapper = userMapper;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtService = jwtService;
@@ -78,6 +82,7 @@ public class AuthService {
 		this.passwordResetService = passwordResetService;
 		this.eventPublisher = eventPublisher;
 		this.accessTokenRevocationService = accessTokenRevocationService;
+		this.clientApplicationService = clientApplicationService;
 	}
 
 	@Transactional
@@ -195,18 +200,20 @@ public class AuthService {
 	}
 
 	@Transactional
-	public void logout(String userId, String accessToken, LogoutRequest request) {
+	public LogoutResponse logout(String userId, String accessToken, LogoutRequest request) {
 		refreshTokenService.revokeRefreshToken(userId, request.refreshToken());
 		revokeCurrentCentralAccessToken(userId, accessToken);
 		eventPublisher.publishEvent(new UserLoggedOutEvent(userId, false, Instant.now()));
+		return logoutResponse();
 	}
 
 	@Transactional
-	public void logoutAllDevices(String userId, String accessToken) {
+	public LogoutResponse logoutAllDevices(String userId, String accessToken) {
 		refreshTokenService.revokeAllActiveRefreshTokens(userId);
 		revokeCurrentCentralAccessToken(userId, accessToken);
 		accessTokenRevocationService.revokeTokensIssuedAtOrBefore(userId, Instant.now());
 		eventPublisher.publishEvent(new UserLoggedOutEvent(userId, true, Instant.now()));
+		return logoutResponse();
 	}
 
 	public UserResponse currentUser(String userId) {
@@ -245,6 +252,10 @@ public class AuthService {
 				.ifPresent(principal -> accessTokenRevocationService.revokeToken(
 						accessToken,
 						principal.expiresAtEpochSecond()));
+	}
+
+	private LogoutResponse logoutResponse() {
+		return new LogoutResponse(clientApplicationService.activeClientLogoutUris());
 	}
 
 	private boolean activeAccount(User user) {

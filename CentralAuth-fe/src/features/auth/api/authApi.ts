@@ -5,6 +5,7 @@ import type {
   CentralLoginRedirectResponse,
   CentralLoginRequestContext,
   CentralLoginResponse,
+  LogoutResponse,
   User,
 } from '../types/auth'
 
@@ -113,7 +114,7 @@ export function resetPassword(payload: ResetPasswordPayload) {
 }
 
 export function logout(token: string, refreshToken: string) {
-  return apiRequest<void>('/api/v1/auth/logout', {
+  return apiRequest<LogoutResponse>('/api/v1/auth/logout', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -124,7 +125,7 @@ export function logout(token: string, refreshToken: string) {
 }
 
 export function logoutAllDevices(token: string) {
-  return apiRequest<void>('/api/v1/auth/logout-all-devices', {
+  return apiRequest<LogoutResponse>('/api/v1/auth/logout-all-devices', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
   })

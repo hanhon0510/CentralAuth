@@ -17,6 +17,7 @@ public class ClientApplicationService {
 	private static final int MAX_CLIENT_NAME_LENGTH = 255;
 	private static final int MAX_REDIRECT_URI_LENGTH = 2048;
 	private static final int MAX_ORIGIN_LENGTH = 512;
+	private static final int MAX_LOGOUT_URI_LENGTH = 2048;
 
 	private final ClientApplicationMapper clientApplicationMapper;
 
@@ -30,8 +31,9 @@ public class ClientApplicationService {
 			String clientName,
 			List<String> redirectUris,
 			List<String> allowedOrigins,
+			List<String> logoutUris,
 			boolean active) {
-		ClientMetadata metadata = validateMetadata(clientId, clientName, redirectUris, allowedOrigins);
+		ClientMetadata metadata = validateMetadata(clientId, clientName, redirectUris, allowedOrigins, logoutUris);
 		if (clientApplicationMapper.findByClientId(metadata.clientId()).isPresent()) {
 			throw new DuplicateClientApplicationException();
 		}
@@ -43,9 +45,11 @@ public class ClientApplicationService {
 				null,
 				null,
 				metadata.redirectUris(),
-				metadata.allowedOrigins()));
+				metadata.allowedOrigins(),
+				metadata.logoutUris()));
 		replaceRedirectUris(metadata.clientId(), metadata.redirectUris());
 		replaceAllowedOrigins(metadata.clientId(), metadata.allowedOrigins());
+		replaceLogoutUris(metadata.clientId(), metadata.logoutUris());
 		return findExisting(metadata.clientId());
 	}
 
@@ -55,8 +59,9 @@ public class ClientApplicationService {
 			String clientName,
 			List<String> redirectUris,
 			List<String> allowedOrigins,
+			List<String> logoutUris,
 			boolean active) {
-		ClientMetadata metadata = validateMetadata(clientId, clientName, redirectUris, allowedOrigins);
+		ClientMetadata metadata = validateMetadata(clientId, clientName, redirectUris, allowedOrigins, logoutUris);
 		ensureExists(metadata.clientId());
 		int updated = clientApplicationMapper.updateClient(metadata.clientId(), metadata.clientName(), active);
 		if (updated == 0) {
@@ -64,6 +69,7 @@ public class ClientApplicationService {
 		}
 		replaceRedirectUris(metadata.clientId(), metadata.redirectUris());
 		replaceAllowedOrigins(metadata.clientId(), metadata.allowedOrigins());
+		replaceLogoutUris(metadata.clientId(), metadata.logoutUris());
 		return findExisting(metadata.clientId());
 	}
 
@@ -96,6 +102,27 @@ public class ClientApplicationService {
 		return client;
 	}
 
+	@Transactional(readOnly = true)
+	public boolean activeClientExists(String clientId) {
+		try {
+			return clientApplicationMapper.findByClientId(validateClientId(clientId))
+					.filter(ClientApplication::active)
+					.isPresent();
+		}
+		catch (InvalidClientMetadataException ex) {
+			return false;
+		}
+	}
+
+	@Transactional(readOnly = true)
+	public List<String> activeClientLogoutUris() {
+		return listClients().stream()
+				.filter(ClientApplication::active)
+				.flatMap(client -> client.logoutUris().stream())
+				.distinct()
+				.toList();
+	}
+
 	private void replaceRedirectUris(String clientId, List<String> redirectUris) {
 		clientApplicationMapper.deleteRedirectUris(clientId);
 		redirectUris.forEach(redirectUri -> clientApplicationMapper.insertRedirectUri(clientId, redirectUri));
@@ -104,6 +131,11 @@ public class ClientApplicationService {
 	private void replaceAllowedOrigins(String clientId, List<String> allowedOrigins) {
 		clientApplicationMapper.deleteAllowedOrigins(clientId);
 		allowedOrigins.forEach(origin -> clientApplicationMapper.insertAllowedOrigin(clientId, origin));
+	}
+
+	private void replaceLogoutUris(String clientId, List<String> logoutUris) {
+		clientApplicationMapper.deleteLogoutUris(clientId);
+		logoutUris.forEach(logoutUri -> clientApplicationMapper.insertLogoutUri(clientId, logoutUri));
 	}
 
 	private void ensureExists(String clientId) {
@@ -121,16 +153,19 @@ public class ClientApplicationService {
 			String clientId,
 			String clientName,
 			List<String> redirectUris,
-			List<String> allowedOrigins) {
+			List<String> allowedOrigins,
+			List<String> logoutUris) {
 		String normalizedClientId = validateClientId(clientId);
 		String normalizedClientName = requireTrimmed(clientName, MAX_CLIENT_NAME_LENGTH);
 		List<String> normalizedRedirectUris = validateRedirectUris(redirectUris);
 		List<String> normalizedAllowedOrigins = validateAllowedOrigins(allowedOrigins);
+		List<String> normalizedLogoutUris = validateLogoutUris(logoutUris);
 		return new ClientMetadata(
 				normalizedClientId,
 				normalizedClientName,
 				normalizedRedirectUris,
-				normalizedAllowedOrigins);
+				normalizedAllowedOrigins,
+				normalizedLogoutUris);
 	}
 
 	private String validateClientId(String clientId) {
@@ -183,6 +218,24 @@ public class ClientApplicationService {
 		return normalized;
 	}
 
+	private List<String> validateLogoutUris(List<String> logoutUris) {
+		if (logoutUris == null) {
+			return List.of();
+		}
+		return deduplicate(logoutUris.stream()
+				.map(this::validateLogoutUri)
+				.toList());
+	}
+
+	private String validateLogoutUri(String logoutUri) {
+		String normalized = requireTrimmed(logoutUri, MAX_LOGOUT_URI_LENGTH);
+		URI uri = parseUri(normalized);
+		if (!hasHttpScheme(uri) || uri.getHost() == null || uri.getFragment() != null || uri.getUserInfo() != null) {
+			throw new InvalidClientMetadataException();
+		}
+		return normalized;
+	}
+
 	private String requireTrimmed(String value, int maxLength) {
 		if (value == null) {
 			throw new InvalidClientMetadataException();
@@ -220,6 +273,7 @@ public class ClientApplicationService {
 			String clientId,
 			String clientName,
 			List<String> redirectUris,
-			List<String> allowedOrigins) {
+			List<String> allowedOrigins,
+			List<String> logoutUris) {
 	}
 }

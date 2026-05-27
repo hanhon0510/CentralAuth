@@ -2,6 +2,7 @@ package com.centralauth.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.blankOrNullString;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -111,6 +112,7 @@ class AuthControllerIntegrationTests {
 				    constraint user_roles_user_id_fk foreign key (user_id) references users (id) on delete cascade
 				)
 				""");
+		jdbcTemplate.execute("delete from clients");
 	}
 
 	@SuppressWarnings("unchecked")
@@ -246,6 +248,26 @@ class AuthControllerIntegrationTests {
 				insert into client_redirect_uris (client_id, redirect_uri)
 				values (?, ?)
 				""", clientId, redirectUri);
+	}
+
+	private void insertClientWithLogout(
+			String clientId,
+			String clientName,
+			String redirectUri,
+			String logoutUri,
+			boolean active) {
+		jdbcTemplate.update("""
+				insert into clients (client_id, client_name, active)
+				values (?, ?, ?)
+				""", clientId, clientName, active);
+		jdbcTemplate.update("""
+				insert into client_redirect_uris (client_id, redirect_uri)
+				values (?, ?)
+				""", clientId, redirectUri);
+		jdbcTemplate.update("""
+				insert into client_logout_uris (client_id, logout_uri)
+				values (?, ?)
+				""", clientId, logoutUri);
 	}
 
 	private String captureCentralLoginStateContext(
@@ -521,7 +543,7 @@ class AuthControllerIntegrationTests {
 		when(valueOperations.getAndDelete("auth_code:" + code)).thenReturn(codeContext);
 		clearInvocations(valueOperations, redisTemplate, kafkaTemplate);
 
-		mockMvc().perform(post("/api/v1/auth/central-login/token")
+		MvcResult exchange = mockMvc().perform(post("/api/v1/auth/central-login/token")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{
@@ -535,9 +557,65 @@ class AuthControllerIntegrationTests {
 				.andExpect(jsonPath("$.message").value("Central login token issued"))
 				.andExpect(jsonPath("$.data.token", not(blankOrNullString())))
 				.andExpect(jsonPath("$.data.refreshToken").doesNotExist())
-				.andExpect(jsonPath("$.data.user.email").value(email));
+				.andExpect(jsonPath("$.data.user.email").value(email))
+				.andReturn();
+
+		mockMvc().perform(get("/api/v1/auth/me")
+						.header("Authorization", "Bearer " + tokenFrom(exchange)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.data.email").value(email));
 
 		verify(valueOperations).getAndDelete("auth_code:" + code);
+	}
+
+	@Test
+	void centralLoginClientTokenIsRejectedWhenClientBecomesInactive() throws Exception {
+		String email = "central-exchange-inactive-client@example.com";
+		String redirectUri = "https://inactive-exchange.example.com/auth/callback";
+		signupAndVerify(email);
+		insertClient("inactive-exchange-client", "Inactive Exchange Client", redirectUri);
+		String loginState = issueCentralLoginState("inactive-exchange-client", redirectUri, "inactive-exchange-state");
+		clearInvocations(valueOperations, redisTemplate, kafkaTemplate);
+
+		MvcResult login = mockMvc().perform(post("/api/v1/auth/central-login")
+						.header("X-Forwarded-For", "203.0.113.85")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "email":"%s",
+								  "password":"Password123!",
+								  "clientId":"inactive-exchange-client",
+								  "redirectUri":"%s",
+								  "state":"inactive-exchange-state",
+								  "loginState":"%s"
+								}
+								""".formatted(email, redirectUri, loginState)))
+				.andExpect(status().isOk())
+				.andReturn();
+		String code = stringFieldFrom(login, "code");
+		String codeContext = captureCentralLoginCodeContext(code, email, "inactive-exchange-client", redirectUri);
+		when(valueOperations.getAndDelete("auth_code:" + code)).thenReturn(codeContext);
+
+		MvcResult exchange = mockMvc().perform(post("/api/v1/auth/central-login/token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "code":"%s",
+								  "clientId":"inactive-exchange-client",
+								  "redirectUri":"%s"
+								}
+								""".formatted(code, redirectUri)))
+				.andExpect(status().isOk())
+				.andReturn();
+
+		jdbcTemplate.update("update clients set active = false where client_id = ?", "inactive-exchange-client");
+
+		mockMvc().perform(get("/api/v1/auth/me")
+						.header("Authorization", "Bearer " + tokenFrom(exchange)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Unauthorized"));
 	}
 
 	@Test
@@ -1150,6 +1228,44 @@ class AuthControllerIntegrationTests {
 	}
 
 	@Test
+	void logoutReturnsActiveRegisteredClientLogoutUris() throws Exception {
+		String email = "logout-front-channel@example.com";
+		signupAndVerify(email);
+		MvcResult signin = signin(email, "Password123!");
+		String accessToken = tokenFrom(signin);
+		String refreshToken = refreshTokenFrom(signin);
+		insertClientWithLogout(
+				"logout-projects-client",
+				"Logout Projects Client",
+				"https://projects.example.com/auth/callback",
+				"https://projects.example.com/logout",
+				true);
+		insertClientWithLogout(
+				"logout-reports-client",
+				"Logout Reports Client",
+				"https://reports.example.com/auth/callback",
+				"https://reports.example.com/logout",
+				true);
+		insertClientWithLogout(
+				"logout-inactive-client",
+				"Logout Inactive Client",
+				"https://inactive.example.com/auth/callback",
+				"https://inactive.example.com/logout",
+				false);
+
+		mockMvc().perform(post("/api/v1/auth/logout")
+						.header("Authorization", "Bearer " + accessToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"refreshToken":"%s"}
+								""".formatted(refreshToken)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.logoutUris[*]", containsInAnyOrder(
+						"https://projects.example.com/logout",
+						"https://reports.example.com/logout")));
+	}
+
+	@Test
 	void logoutPublishesLogoutEvent() throws Exception {
 		String email = "logout-event@example.com";
 		signupAndVerify(email);
@@ -1224,6 +1340,30 @@ class AuthControllerIntegrationTests {
 
 		assertThat(activeRefreshTokenCount("logout-all@example.com")).isZero();
 		assertThat(activeRefreshTokenCount("logout-all-other@example.com")).isEqualTo(otherUsersActiveTokens);
+	}
+
+	@Test
+	void logoutAllDevicesReturnsActiveRegisteredClientLogoutUris() throws Exception {
+		String email = "logout-all-front-channel@example.com";
+		signupAndVerify(email);
+		MvcResult signin = signin(email, "Password123!");
+		insertClientWithLogout(
+				"logout-all-projects-client",
+				"Logout All Projects Client",
+				"https://projects-all.example.com/auth/callback",
+				"https://projects-all.example.com/logout",
+				true);
+		insertClientWithLogout(
+				"logout-all-inactive-client",
+				"Logout All Inactive Client",
+				"https://inactive-all.example.com/auth/callback",
+				"https://inactive-all.example.com/logout",
+				false);
+
+		mockMvc().perform(post("/api/v1/auth/logout-all-devices")
+						.header("Authorization", "Bearer " + tokenFrom(signin)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.logoutUris[0]").value("https://projects-all.example.com/logout"));
 	}
 
 	@Test

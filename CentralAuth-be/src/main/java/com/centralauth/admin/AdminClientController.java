@@ -42,6 +42,7 @@ public class AdminClientController {
 						request.clientName(),
 						request.redirectUris(),
 						request.allowedOrigins(),
+						request.logoutUris(),
 						request.active() == null || request.active())));
 	}
 
@@ -56,6 +57,7 @@ public class AdminClientController {
 						request.clientName(),
 						request.redirectUris(),
 						request.allowedOrigins(),
+						request.logoutUris(),
 						request.active())));
 	}
 

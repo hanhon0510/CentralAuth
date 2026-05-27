@@ -23,11 +23,13 @@ public class DemoClientBootstrapService {
 			new DemoClientRegistration(
 					"projects-demo",
 					"Projects Demo Client",
-					"/demo/projects/callback"),
+					"/demo/projects/callback",
+					"/demo/projects/logout"),
 			new DemoClientRegistration(
 					"reports-demo",
 					"Reports Demo Client",
-					"/demo/reports/callback"));
+					"/demo/reports/callback",
+					"/demo/reports/logout"));
 
 	private final ClientApplicationService clientApplicationService;
 	private final boolean enabled;
@@ -59,6 +61,7 @@ public class DemoClientBootstrapService {
 					demoClient.clientName(),
 					demoClient.redirectUris(),
 					LOCAL_DEMO_ORIGINS,
+					demoClient.logoutUris(),
 					true);
 		}
 	}
@@ -66,11 +69,18 @@ public class DemoClientBootstrapService {
 	private record DemoClientRegistration(
 			String clientId,
 			String clientName,
-			String callbackPath) {
+			String callbackPath,
+			String logoutPath) {
 
 		List<String> redirectUris() {
 			return LOCAL_DEMO_ORIGINS.stream()
 					.map(origin -> origin + callbackPath)
+					.toList();
+		}
+
+		List<String> logoutUris() {
+			return LOCAL_DEMO_ORIGINS.stream()
+					.map(origin -> origin + logoutPath)
 					.toList();
 		}
 	}

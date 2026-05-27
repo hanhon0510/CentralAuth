@@ -23,6 +23,10 @@ public interface ClientApplicationMapper {
 
 	void deleteAllowedOrigins(@Param("clientId") String clientId);
 
+	void insertLogoutUri(@Param("clientId") String clientId, @Param("logoutUri") String logoutUri);
+
+	void deleteLogoutUris(@Param("clientId") String clientId);
+
 	int updateClient(
 			@Param("clientId") String clientId,
 			@Param("clientName") String clientName,

@@ -71,3 +71,11 @@ export function clearClientToken(
 ) {
   storage.removeItem(client.tokenStorageKey)
 }
+
+export function clearClientSession(
+  client: DemoClient,
+  storage: DemoStorage = window.localStorage,
+) {
+  clearClientToken(client, storage)
+  clearCallbackState(client, storage)
+}

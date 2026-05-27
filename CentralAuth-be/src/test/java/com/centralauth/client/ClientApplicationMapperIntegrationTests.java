@@ -53,11 +53,15 @@ class ClientApplicationMapperIntegrationTests {
 						"http://localhost:5173/auth/callback"),
 				List.of(
 						"https://dashboard.example.com",
+						"http://localhost:5173"),
+				List.of(
+						"https://dashboard.example.com/logout",
 						"http://localhost:5173"));
 
 		clientApplicationMapper.insert(client);
 		client.redirectUris().forEach(uri -> clientApplicationMapper.insertRedirectUri(client.clientId(), uri));
 		client.allowedOrigins().forEach(origin -> clientApplicationMapper.insertAllowedOrigin(client.clientId(), origin));
+		client.logoutUris().forEach(uri -> clientApplicationMapper.insertLogoutUri(client.clientId(), uri));
 
 		ClientApplication saved = clientApplicationMapper.findByClientId("dashboard-app").orElseThrow();
 
@@ -72,6 +76,9 @@ class ClientApplicationMapperIntegrationTests {
 		assertThat(saved.allowedOrigins()).containsExactly(
 				"http://localhost:5173",
 				"https://dashboard.example.com");
+		assertThat(saved.logoutUris()).containsExactly(
+				"http://localhost:5173",
+				"https://dashboard.example.com/logout");
 
 		Instant originalCreatedAt = saved.createdAt();
 
@@ -80,6 +87,8 @@ class ClientApplicationMapperIntegrationTests {
 		clientApplicationMapper.insertRedirectUri("dashboard-app", "https://console.example.com/callback");
 		clientApplicationMapper.deleteAllowedOrigins("dashboard-app");
 		clientApplicationMapper.insertAllowedOrigin("dashboard-app", "https://console.example.com");
+		clientApplicationMapper.deleteLogoutUris("dashboard-app");
+		clientApplicationMapper.insertLogoutUri("dashboard-app", "https://console.example.com/logout");
 
 		assertThat(updated).isEqualTo(1);
 
@@ -89,6 +98,7 @@ class ClientApplicationMapperIntegrationTests {
 		assertThat(replaced.createdAt()).isEqualTo(originalCreatedAt);
 		assertThat(replaced.redirectUris()).containsExactly("https://console.example.com/callback");
 		assertThat(replaced.allowedOrigins()).containsExactly("https://console.example.com");
+		assertThat(replaced.logoutUris()).containsExactly("https://console.example.com/logout");
 
 		clientApplicationMapper.insert(new ClientApplication(
 				"mobile-app",
@@ -96,6 +106,7 @@ class ClientApplicationMapperIntegrationTests {
 				true,
 				null,
 				null,
+				List.of(),
 				List.of(),
 				List.of()));
 
