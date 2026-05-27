@@ -2,6 +2,7 @@ package com.centralauth.admin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -96,6 +97,8 @@ class AdminUserControllerIntegrationTests {
 				.andExpect(jsonPath("$.data[0].enabled").value(false))
 				.andExpect(jsonPath("$.data[0].emailVerified").value(true))
 				.andExpect(jsonPath("$.data[0].accountStatus").value("LOCKED"))
+				.andExpect(jsonPath("$.data[0].createdAt").value(matchesPattern("\\d{4}-\\d{2}-\\d{2}T.*Z")))
+				.andExpect(jsonPath("$.data[0].updatedAt").value(matchesPattern("\\d{4}-\\d{2}-\\d{2}T.*Z")))
 				.andExpect(jsonPath("$.data[0].roles[*]", containsInAnyOrder("ROLE_USER", "ROLE_ADMIN")));
 	}
 
