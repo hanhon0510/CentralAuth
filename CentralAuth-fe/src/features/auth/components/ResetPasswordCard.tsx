@@ -9,6 +9,7 @@ type ResetPasswordValues = {
 };
 
 type ResetPasswordCardProps = {
+  initialToken?: string;
   loading: boolean;
   error: string;
   message: string;
@@ -17,6 +18,7 @@ type ResetPasswordCardProps = {
 };
 
 export function ResetPasswordCard({
+  initialToken = '',
   loading,
   error,
   message,
@@ -25,6 +27,10 @@ export function ResetPasswordCard({
 }: ResetPasswordCardProps) {
   const [form] = Form.useForm<ResetPasswordValues>();
   const { language, t } = useI18n();
+
+  useEffect(() => {
+    form.setFieldValue('token', initialToken);
+  }, [form, initialToken]);
 
   useEffect(() => {
     const fieldsWithErrors = form
@@ -39,7 +45,7 @@ export function ResetPasswordCard({
 
   return (
     <Card title={t('auth.resetPassword')}>
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
         {message ? <Alert type="success" showIcon message={message} /> : null}
         {error ? <Alert type="error" showIcon message={error} /> : null}
 

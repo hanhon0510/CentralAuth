@@ -36,8 +36,8 @@ export function ForgotPasswordCard({
 
   return (
     <Card title={t('auth.forgotPassword')}>
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
-        {error ? <Alert type="error" showIcon message={error} /> : null}
+      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
+        {error ? <Alert type="error" showIcon title={error} /> : null}
 
         <Form<ForgotPasswordValues>
           form={form}
@@ -53,7 +53,11 @@ export function ForgotPasswordCard({
               { type: 'email', message: t('auth.validation.email.invalid') },
             ]}
           >
-            <Input prefix={<MailOutlined />} maxLength={320} autoComplete="email" />
+            <Input
+              prefix={<MailOutlined />}
+              maxLength={320}
+              autoComplete="email"
+            />
           </Form.Item>
 
           <Button type="primary" htmlType="submit" loading={loading} block>

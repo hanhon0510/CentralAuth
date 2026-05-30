@@ -57,7 +57,7 @@ export function AuthFormCard({
 
   return (
     <Card title={title ?? t('auth.emailAccess')}>
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
         <Segmented<AuthMode>
           block
           value={mode}

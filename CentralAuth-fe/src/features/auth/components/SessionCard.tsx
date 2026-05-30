@@ -17,7 +17,7 @@ export function SessionCard({ roles, tokenPreview, user, loading, onSignOut, onS
 
   return (
     <Card title={t('session.current')}>
-      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
         <Space align="center">
           <Typography.Title level={4} style={{ margin: 0 }}>
             {user.displayName || user.email}

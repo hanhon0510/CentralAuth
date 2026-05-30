@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthPage } from '../../features/auth/pages/AuthPage'
+import { ForgotPasswordPage } from '../../features/auth/pages/ForgotPasswordPage'
+import { ResetPasswordPage } from '../../features/auth/pages/ResetPasswordPage'
+import { VerifyEmailPage } from '../../features/auth/pages/VerifyEmailPage'
 import { DashboardPage } from '../../features/dashboard/pages/DashboardPage'
 import { ProfilePage } from '../../features/profile/pages/ProfilePage'
 import { ROUTES } from '../../shared/constants/routes'
@@ -25,6 +28,9 @@ export function AppRouter() {
       <Route path="/" element={<Navigate to={ROUTES.signin} replace />} />
       <Route path={ROUTES.signin} element={<AuthPage mode="signin" />} />
       <Route path={ROUTES.signup} element={<AuthPage mode="signup" />} />
+      <Route path={ROUTES.verifyEmail} element={<VerifyEmailPage />} />
+      <Route path={ROUTES.forgotPassword} element={<ForgotPasswordPage />} />
+      <Route path={ROUTES.resetPassword} element={<ResetPasswordPage />} />
       <Route
         path={ROUTES.dashboard}
         element={
