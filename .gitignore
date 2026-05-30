@@ -73,3 +73,6 @@ lerna-debug.log*
 
 /docs/*
 AGENTS.md
+/.cursor/*
+!/.cursor/rules/
+!/.cursor/rules/**

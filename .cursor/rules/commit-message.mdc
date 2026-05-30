@@ -1,0 +1,13 @@
+---
+description: Commit message format
+alwaysApply: true
+---
+
+# Commit Message Rules
+
+- Use Conventional Commits for every commit message.
+- Format: `<type>: <imperative summary>`.
+- Allowed common types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `build`, `ci`.
+- Keep the summary concise, lowercase after the type, and focused on the change.
+- Before committing, inspect recent history with `git log --oneline -10` and match the repository style.
+- Do not use title-case freeform messages such as `Add authenticated profile page`; use `feat: add authenticated profile page`.
