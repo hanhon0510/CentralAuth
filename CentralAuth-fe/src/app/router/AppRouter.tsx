@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthPage } from '../../features/auth/pages/AuthPage'
 import { DashboardPage } from '../../features/dashboard/pages/DashboardPage'
+import { ProfilePage } from '../../features/profile/pages/ProfilePage'
 import { ROUTES } from '../../shared/constants/routes'
 import { useAuthSession } from '../../features/auth/context/useAuthSession'
 import { demoClients } from '../../features/demo-clients/demoClients'
@@ -9,12 +11,12 @@ import { DemoClientLogoutPage } from '../../features/demo-clients/pages/DemoClie
 import { DemoClientProtectedPage } from '../../features/demo-clients/pages/DemoClientProtectedPage'
 import { DemoClientPublicPage } from '../../features/demo-clients/pages/DemoClientPublicPage'
 
-function ProtectedDashboardRoute() {
+function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, restoring } = useAuthSession()
 
   if (restoring) return null
   if (!user) return <Navigate to={ROUTES.signin} replace />
-  return <DashboardPage />
+  return children
 }
 
 export function AppRouter() {
@@ -23,7 +25,22 @@ export function AppRouter() {
       <Route path="/" element={<Navigate to={ROUTES.signin} replace />} />
       <Route path={ROUTES.signin} element={<AuthPage mode="signin" />} />
       <Route path={ROUTES.signup} element={<AuthPage mode="signup" />} />
-      <Route path={ROUTES.dashboard} element={<ProtectedDashboardRoute />} />
+      <Route
+        path={ROUTES.dashboard}
+        element={
+          <ProtectedRoute>
+            <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path={ROUTES.profile}
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/demo" element={<Navigate to={demoClients.projects.publicPath} replace />} />
       <Route
         path={demoClients.projects.publicPath}
