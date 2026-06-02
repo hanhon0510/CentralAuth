@@ -68,7 +68,7 @@ export function AuthFormCard({
           onChange={onModeChange}
         />
 
-        {error ? <Alert type="error" showIcon message={error} /> : null}
+        {error ? <Alert type="error" showIcon title={error} /> : null}
 
         <Form<AuthFormValues>
           form={form}

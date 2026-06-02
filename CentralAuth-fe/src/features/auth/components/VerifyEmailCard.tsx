@@ -72,9 +72,9 @@ export function VerifyEmailCard({
       <Space orientation="vertical" size="large" style={{ width: '100%' }}>
         {email && emailReadonly ? <Typography.Text type="secondary">{email}</Typography.Text> : null}
 
-        {error ? <Alert type="error" showIcon message={error} /> : null}
+        {error ? <Alert type="error" showIcon title={error} /> : null}
         {resendSucceeded ? (
-          <Alert type="success" showIcon message={t('auth.resendSent')} />
+          <Alert type="success" showIcon title={t('auth.resendSent')} />
         ) : null}
 
         <Form<VerifyEmailValues>

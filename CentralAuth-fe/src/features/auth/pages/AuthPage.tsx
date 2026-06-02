@@ -37,6 +37,13 @@ type AuthPageProps = {
   mode: AuthMode
 }
 
+type AuthRouteState = {
+  authRequired?: boolean
+  passwordResetSucceeded?: boolean
+  returnTo?: string
+  verifiedEmail?: string
+}
+
 type ParsedCentralLoginRequest =
   | { requested: false; context?: undefined }
   | { requested: true; context?: CentralLoginRequestContext }
@@ -77,6 +84,24 @@ function authPathForMode(mode: AuthMode, search: string) {
   return `${mode === 'signup' ? ROUTES.signup : ROUTES.signin}${search}`
 }
 
+function safeAuthenticatedReturnTo(returnTo: string | undefined) {
+  if (!returnTo || !returnTo.startsWith('/') || returnTo.startsWith('//')) {
+    return ROUTES.dashboard
+  }
+
+  const publicAuthRoutes = [
+    ROUTES.signin,
+    ROUTES.signup,
+    ROUTES.verifyEmail,
+    ROUTES.forgotPassword,
+    ROUTES.resetPassword,
+  ]
+
+  return publicAuthRoutes.some((route) => returnTo === route || returnTo.startsWith(`${route}?`))
+    ? ROUTES.dashboard
+    : returnTo
+}
+
 function toCentralLoginRequestContext(context: CentralLoginContext): CentralLoginRequestContext {
   return {
     clientId: context.clientId,
@@ -103,6 +128,7 @@ export function AuthPage({ mode }: AuthPageProps) {
     user,
     loading,
     restoring,
+    sessionError,
     signinWithPassword,
     signinWithCentralLogin,
     signupWithPassword,
@@ -141,18 +167,17 @@ export function AuthPage({ mode }: AuthPageProps) {
     ? centralLoginKey(centralLoginContext)
     : ''
 
-  const routeState = location.state as {
-    verifiedEmail?: string
-    passwordResetSucceeded?: boolean
-  } | null
+  const routeState = location.state as AuthRouteState | null
+  const authRequired = routeState?.authRequired ?? false
   const verifiedEmail = routeState?.verifiedEmail ?? ''
   const passwordResetSucceeded = routeState?.passwordResetSucceeded ?? false
+  const authenticatedReturnTo = safeAuthenticatedReturnTo(routeState?.returnTo)
 
   useEffect(() => {
     if (user && !centralLoginRequest.requested) {
-      navigate(ROUTES.dashboard, { replace: true })
+      navigate(authenticatedReturnTo, { replace: true })
     }
-  }, [centralLoginRequest.requested, navigate, user])
+  }, [authenticatedReturnTo, centralLoginRequest.requested, navigate, user])
 
   useEffect(() => {
     if (!centralLoginRequest.context) {
@@ -285,14 +310,28 @@ export function AuthPage({ mode }: AuthPageProps) {
         <Alert
           type="success"
           showIcon
-          message={t('auth.emailVerifiedSignin')}
+          title={t('auth.emailVerifiedSignin')}
         />
       ) : null}
       {passwordResetSucceeded ? (
         <Alert
           type="success"
           showIcon
-          message={t('auth.passwordResetSucceeded')}
+          title={t('auth.passwordResetSucceeded')}
+        />
+      ) : null}
+      {sessionError ? (
+        <Alert
+          type="warning"
+          showIcon
+          title={sessionError}
+        />
+      ) : null}
+      {authRequired && !sessionError ? (
+        <Alert
+          type="info"
+          showIcon
+          title={t('auth.signinRequired')}
         />
       ) : null}
       <AuthFormCard

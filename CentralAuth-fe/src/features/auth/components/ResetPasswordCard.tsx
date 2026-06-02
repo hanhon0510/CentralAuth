@@ -46,8 +46,8 @@ export function ResetPasswordCard({
   return (
     <Card title={t('auth.resetPassword')}>
       <Space orientation="vertical" size="large" style={{ width: '100%' }}>
-        {message ? <Alert type="success" showIcon message={message} /> : null}
-        {error ? <Alert type="error" showIcon message={error} /> : null}
+        {message ? <Alert type="success" showIcon title={message} /> : null}
+        {error ? <Alert type="error" showIcon title={error} /> : null}
 
         <Form<ResetPasswordValues>
           form={form}

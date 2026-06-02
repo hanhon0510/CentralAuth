@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthPage } from '../../features/auth/pages/AuthPage'
 import { ForgotPasswordPage } from '../../features/auth/pages/ForgotPasswordPage'
 import { ResetPasswordPage } from '../../features/auth/pages/ResetPasswordPage'
@@ -16,9 +16,21 @@ import { DemoClientPublicPage } from '../../features/demo-clients/pages/DemoClie
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, restoring } = useAuthSession()
+  const location = useLocation()
 
   if (restoring) return null
-  if (!user) return <Navigate to={ROUTES.signin} replace />
+  if (!user) {
+    return (
+      <Navigate
+        to={ROUTES.signin}
+        replace
+        state={{
+          authRequired: true,
+          returnTo: `${location.pathname}${location.search}${location.hash}`,
+        }}
+      />
+    )
+  }
   return children
 }
 

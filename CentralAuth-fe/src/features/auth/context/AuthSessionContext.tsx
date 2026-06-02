@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useReducer } from 'react'
 import type { PropsWithChildren } from 'react'
 import {
   centralLogin,
@@ -13,36 +13,54 @@ import {
   verifyEmail,
 } from '../api/authApi'
 import { refreshTokenStorageKey, tokenStorageKey } from '../../../shared/constants/storage'
-import type { AuthResponse, CentralLoginRequestContext, User } from '../types/auth'
+import type { AuthResponse, CentralLoginRequestContext } from '../types/auth'
 import { AuthSessionStore } from './auth-session-store'
 import { rolesFromJwt } from '../../../shared/lib/jwt'
 import { propagateFrontChannelLogout } from '../lib/frontChannelLogout'
+import {
+  authSessionReducer,
+  createAuthSessionState,
+  type AuthOperation,
+} from './authSessionReducer'
+import { getCurrentLanguage } from '../../../shared/i18n/language'
+import { translate } from '../../../shared/i18n/messages'
 
 export function AuthSessionProvider({ children }: PropsWithChildren) {
-  const [loading, setLoading] = useState(false)
-  const [token, setToken] = useState(() => localStorage.getItem(tokenStorageKey) ?? '')
-  const [refreshToken, setRefreshToken] = useState(() => localStorage.getItem(refreshTokenStorageKey) ?? '')
-  const [user, setUser] = useState<User | null>(null)
-  const [restoring, setRestoring] = useState(Boolean(token))
+  const [state, dispatch] = useReducer(authSessionReducer, undefined, () =>
+    createAuthSessionState(
+      localStorage.getItem(tokenStorageKey) ?? '',
+      localStorage.getItem(refreshTokenStorageKey) ?? '',
+    ),
+  )
+  const {
+    operation,
+    refreshToken,
+    restoring,
+    sessionError,
+    token,
+    user,
+  } = state
+  const loading = Boolean(operation)
 
   useEffect(() => {
-    if (!token) return
+    if (!token || user) return
 
     let cancelled = false
     async function fetchCurrentUser() {
-      setRestoring(true)
+      dispatch({ type: 'restoreStarted' })
       try {
         const currentUser = await restoreSession(token)
         if (!cancelled) {
-          setUser(currentUser)
+          dispatch({ type: 'restoreSucceeded', user: currentUser })
         }
       } catch {
         if (!cancelled) {
-          clearSession()
-        }
-      } finally {
-        if (!cancelled) {
-          setRestoring(false)
+          localStorage.removeItem(tokenStorageKey)
+          localStorage.removeItem(refreshTokenStorageKey)
+          dispatch({
+            type: 'restoreFailed',
+            error: translate(getCurrentLanguage(), 'auth.sessionExpired'),
+          })
         }
       }
     }
@@ -51,7 +69,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     return () => {
       cancelled = true
     }
-  }, [token])
+  }, [token, user])
 
   const tokenPreview = useMemo(() => {
     if (!token) return ''
@@ -63,13 +81,10 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   const isAdmin = roles.includes('ROLE_ADMIN')
 
   async function signinWithPassword(email: string, password: string) {
-    setLoading(true)
-    try {
+    return runOperation('signin', async () => {
       const response = await signin({ email, password })
       storeSession(response)
-    } finally {
-      setLoading(false)
-    }
+    })
   }
 
   async function signinWithCentralLogin(
@@ -77,8 +92,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     password: string,
     context: CentralLoginRequestContext,
   ) {
-    setLoading(true)
-    try {
+    return runOperation('centralLogin', async () => {
       const response = await centralLogin({
         email,
         password,
@@ -89,56 +103,39 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       })
       storeSession(response.auth)
       return response
-    } finally {
-      setLoading(false)
-    }
+    })
   }
 
   async function signupWithPassword(email: string, password: string, displayName: string) {
-    setLoading(true)
-    try {
+    return runOperation('signup', async () => {
       const response = await signup({ email, password, displayName })
       return response.user
-    } finally {
-      setLoading(false)
-    }
+    })
   }
 
   async function verifyEmailWithOtp(email: string, otp: string) {
-    setLoading(true)
-    try {
+    return runOperation('verifyEmail', async () => {
       await verifyEmail({ email, otp })
-    } finally {
-      setLoading(false)
-    }
+    })
   }
 
   async function resendVerificationOtp(email: string) {
-    setLoading(true)
-    try {
+    return runOperation('resendVerificationOtp', async () => {
       const response = await requestVerificationOtpResend({ email })
       return response.resendCooldownSeconds
-    } finally {
-      setLoading(false)
-    }
+    })
   }
 
   async function requestPasswordReset(email: string) {
-    setLoading(true)
-    try {
+    return runOperation('forgotPassword', async () => {
       await requestPasswordResetApi({ email })
-    } finally {
-      setLoading(false)
-    }
+    })
   }
 
   async function resetPasswordWithToken(token: string, newPassword: string) {
-    setLoading(true)
-    try {
+    return runOperation('resetPassword', async () => {
       await resetPasswordApi({ token, newPassword })
-    } finally {
-      setLoading(false)
-    }
+    })
   }
 
   async function signOut() {
@@ -147,14 +144,14 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       return
     }
 
-    setLoading(true)
-    try {
-      const response = await logout(token, refreshToken)
-      propagateFrontChannelLogout(response.logoutUris)
-    } finally {
-      clearSession()
-      setLoading(false)
-    }
+    return runOperation('signOut', async () => {
+      try {
+        const response = await logout(token, refreshToken)
+        propagateFrontChannelLogout(response.logoutUris)
+      } finally {
+        clearSession()
+      }
+    })
   }
 
   async function signOutAllDevices() {
@@ -163,38 +160,44 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       return
     }
 
-    setLoading(true)
+    return runOperation('signOutAllDevices', async () => {
+      try {
+        const response = await logoutAllDevices(token)
+        propagateFrontChannelLogout(response.logoutUris)
+      } finally {
+        clearSession()
+      }
+    })
+  }
+
+  async function runOperation<T>(authOperation: AuthOperation, action: () => Promise<T>) {
+    dispatch({ type: 'operationStarted', operation: authOperation })
     try {
-      const response = await logoutAllDevices(token)
-      propagateFrontChannelLogout(response.logoutUris)
+      return await action()
     } finally {
-      clearSession()
-      setLoading(false)
+      dispatch({ type: 'operationFinished' })
     }
   }
 
   function storeSession(response: AuthResponse) {
     localStorage.setItem(tokenStorageKey, response.token)
     localStorage.setItem(refreshTokenStorageKey, response.refreshToken)
-    setToken(response.token)
-    setRefreshToken(response.refreshToken)
-    setUser(response.user)
+    dispatch({ type: 'sessionStored', response })
   }
 
   function clearSession() {
     localStorage.removeItem(tokenStorageKey)
     localStorage.removeItem(refreshTokenStorageKey)
-    setToken('')
-    setRefreshToken('')
-    setUser(null)
-    setRestoring(false)
+    dispatch({ type: 'sessionCleared' })
   }
 
   const value = {
     isAdmin,
     loading,
+    operation,
     roles,
     restoring,
+    sessionError,
     token,
     tokenPreview,
     user,

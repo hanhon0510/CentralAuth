@@ -80,7 +80,7 @@ export function DemoClientCallbackPage({ client }: DemoClientCallbackPageProps) 
                 <Typography.Text className="app-brand">{client.name} callback</Typography.Text>
                 {callbackRequest.error || error ? (
                   <>
-                    <Alert type="error" showIcon message={callbackRequest.error || error} />
+                    <Alert type="error" showIcon title={callbackRequest.error || error} />
                     <Button type="primary" icon={<LoginOutlined />} onClick={handleRetryLogin}>
                       Login with CentralAuth
                     </Button>

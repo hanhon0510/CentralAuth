@@ -99,7 +99,7 @@ export function DemoClientProtectedPage({ client }: DemoClientProtectedPageProps
                       <Alert
                         type="success"
                         showIcon
-                        message={`Authenticated as ${user.email}`}
+                        title={`Authenticated as ${user.email}`}
                       />
                       <div className="demo-client-meta">
                         <span>Client audience</span>
@@ -111,7 +111,7 @@ export function DemoClientProtectedPage({ client }: DemoClientProtectedPageProps
                       </div>
                     </>
                   ) : (
-                    <Alert type="warning" showIcon message={visibleError} />
+                    <Alert type="warning" showIcon title={visibleError} />
                   )}
 
                   <Space wrap>

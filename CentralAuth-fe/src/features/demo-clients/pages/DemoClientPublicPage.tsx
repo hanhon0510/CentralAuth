@@ -43,7 +43,7 @@ export function DemoClientPublicPage({ client }: DemoClientPublicPageProps) {
                   <Alert
                     type="info"
                     showIcon
-                    message="This page is public. The protected page requires a client token issued by CentralAuth."
+                    title="This page is public. The protected page requires a client token issued by CentralAuth."
                   />
 
                   <div className="demo-client-meta">

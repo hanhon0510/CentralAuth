@@ -1,11 +1,14 @@
 import { createContext } from 'react'
 import type { CentralLoginRedirectResponse, CentralLoginRequestContext, User } from '../types/auth'
+import type { AuthOperation } from './authSessionReducer'
 
 export type AuthSessionContextValue = {
   isAdmin: boolean
   loading: boolean
+  operation: AuthOperation | null
   roles: string[]
   restoring: boolean
+  sessionError: string
   token: string
   tokenPreview: string
   user: User | null

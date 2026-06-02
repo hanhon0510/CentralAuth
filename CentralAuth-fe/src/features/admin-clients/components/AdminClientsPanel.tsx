@@ -253,7 +253,7 @@ export function AdminClientsPanel({ token }: AdminClientsPanelProps) {
       }
     >
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-        {error ? <Alert type="error" showIcon message={error} /> : null}
+        {error ? <Alert type="error" showIcon title={error} /> : null}
 
         <Table
           rowKey="clientId"

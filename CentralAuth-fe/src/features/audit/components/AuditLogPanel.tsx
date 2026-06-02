@@ -149,7 +149,7 @@ export function AuditLogPanel({ token }: AuditLogPanelProps) {
       }
     >
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-        {error ? <Alert type="error" showIcon message={error} /> : null}
+        {error ? <Alert type="error" showIcon title={error} /> : null}
 
         <Form
           form={form}
