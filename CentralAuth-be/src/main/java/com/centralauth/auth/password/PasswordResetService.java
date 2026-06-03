@@ -6,8 +6,6 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Locale;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -16,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.centralauth.auth.exception.InvalidPasswordResetTokenException;
+import com.centralauth.auth.logging.StructuredAuthLogger;
 import com.centralauth.auth.token.RefreshTokenService;
 import com.centralauth.event.auth.PasswordChangedEvent;
 import com.centralauth.event.auth.PasswordResetRequestedEvent;
@@ -26,7 +25,6 @@ import com.centralauth.user.UserMapper;
 @Service
 public class PasswordResetService {
 
-	private static final Logger log = LoggerFactory.getLogger(PasswordResetService.class);
 	private static final int RESET_TOKEN_BYTES = 32;
 	private static final String KEY_PREFIX = "password-reset:";
 	private static final Base64.Encoder BASE64_URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
@@ -76,13 +74,14 @@ public class PasswordResetService {
 		refreshTokenService.revokeAllActiveRefreshTokens(userId);
 		User user = userMapper.findById(userId).orElseThrow(InvalidPasswordResetTokenException::new);
 		eventPublisher.publishEvent(new PasswordChangedEvent(user.id(), user.email(), Instant.now()));
+		StructuredAuthLogger.passwordChanged(user.id(), user.email());
 	}
 
 	private void issueResetToken(User user) {
 		String token = createOpaqueToken();
 		redisTemplate.opsForValue().set(redisKey(token), user.id(), tokenTtl);
-		log.info("Password reset token for {}: {}", user.email(), token);
 		eventPublisher.publishEvent(new PasswordResetRequestedEvent(user.id(), user.email(), Instant.now()));
+		StructuredAuthLogger.passwordResetRequested(user.id(), user.email());
 	}
 
 	private String createOpaqueToken() {

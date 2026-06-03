@@ -4,8 +4,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -16,7 +14,6 @@ import com.centralauth.auth.exception.InvalidEmailVerificationOtpException;
 @Service
 public class EmailVerificationService {
 
-	private static final Logger log = LoggerFactory.getLogger(EmailVerificationService.class);
 	private static final String KEY_PREFIX = "email-verification:";
 	private static final String RESEND_THROTTLE_KEY_PREFIX = "email-verification-resend:";
 	private static final int OTP_BOUND = 1_000_000;
@@ -39,7 +36,6 @@ public class EmailVerificationService {
 	public void issueOtp(String email) {
 		String otp = generateOtp();
 		redisTemplate.opsForValue().set(redisKey(email), otp, otpTtl);
-		log.info("Email verification OTP for {}: {}", email, otp);
 	}
 
 	public int resendOtp(String email) {

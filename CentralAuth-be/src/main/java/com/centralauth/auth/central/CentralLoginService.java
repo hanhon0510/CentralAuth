@@ -17,6 +17,7 @@ import com.centralauth.auth.dto.SigninRequest;
 import com.centralauth.auth.dto.UserResponse;
 import com.centralauth.auth.central.AuthorizationCodeService.AuthorizationCodeContext;
 import com.centralauth.auth.central.CentralLoginStateService.CentralLoginStateContext;
+import com.centralauth.auth.logging.StructuredAuthLogger;
 import com.centralauth.client.ClientApplication;
 import com.centralauth.client.ClientApplicationService;
 
@@ -68,6 +69,7 @@ public class CentralLoginService {
 				auth.user().id(),
 				context.clientId(),
 				context.redirectUri());
+		StructuredAuthLogger.centralLoginCodeIssued(auth.user().id(), context.clientId());
 		return new CentralLoginResponse(
 				context.redirectUri(),
 				code,
@@ -89,6 +91,7 @@ public class CentralLoginService {
 				user.id(),
 				context.clientId(),
 				context.redirectUri());
+		StructuredAuthLogger.centralLoginCodeIssued(user.id(), context.clientId());
 		return new CentralLoginRedirectResponse(
 				context.redirectUri(),
 				code,

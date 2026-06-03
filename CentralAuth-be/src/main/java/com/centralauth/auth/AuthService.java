@@ -25,11 +25,13 @@ import com.centralauth.auth.dto.UserResponse;
 import com.centralauth.auth.dto.VerifyEmailRequest;
 import com.centralauth.auth.exception.DuplicateEmailException;
 import com.centralauth.auth.exception.EmailVerificationNotPendingException;
+import com.centralauth.auth.exception.EmailVerificationOtpResendThrottledException;
 import com.centralauth.auth.exception.InvalidCredentialsException;
 import com.centralauth.auth.exception.InvalidEmailVerificationOtpException;
 import com.centralauth.auth.login.LoginAttemptService;
 import com.centralauth.auth.login.LoginRateLimitExceededException;
 import com.centralauth.auth.login.LoginTemporarilyLockedException;
+import com.centralauth.auth.logging.StructuredAuthLogger;
 import com.centralauth.auth.password.PasswordResetService;
 import com.centralauth.auth.token.RefreshTokenService;
 import com.centralauth.auth.verification.EmailVerificationService;
@@ -102,6 +104,7 @@ public class AuthService {
 			userMapper.insert(user);
 		}
 		catch (DuplicateKeyException ex) {
+			StructuredAuthLogger.signupFailed(email, "DUPLICATE_EMAIL");
 			throw new DuplicateEmailException();
 		}
 		userMapper.insertRole(user.id(), DEFAULT_ROLE);
@@ -114,14 +117,22 @@ public class AuthService {
 				savedUser.email(),
 				savedUser.displayName(),
 				Instant.now()));
+		StructuredAuthLogger.userRegistered(savedUser.id(), savedUser.email());
 		return response;
 	}
 
 	@Transactional
 	public void verifyEmail(VerifyEmailRequest request) {
 		String email = normalizeEmail(request.email());
-		emailVerificationService.requireValidOtp(email, request.otp());
+		try {
+			emailVerificationService.requireValidOtp(email, request.otp());
+		}
+		catch (InvalidEmailVerificationOtpException ex) {
+			StructuredAuthLogger.emailVerificationFailed(email, "INVALID_OTP");
+			throw ex;
+		}
 		if (userMapper.verifyEmail(email) == 0) {
+			StructuredAuthLogger.emailVerificationFailed(email, "NOT_PENDING");
 			throw new InvalidEmailVerificationOtpException();
 		}
 		emailVerificationService.consumeOtp(email);
@@ -130,15 +141,29 @@ public class AuthService {
 				verifiedUser.id(),
 				verifiedUser.email(),
 				Instant.now()));
+		StructuredAuthLogger.emailVerified(verifiedUser.id(), verifiedUser.email());
 	}
 
 	public ResendVerificationOtpResponse resendVerificationOtp(ResendVerificationOtpRequest request) {
 		String email = normalizeEmail(request.email());
-		User user = userMapper.findByEmail(email).orElseThrow(EmailVerificationNotPendingException::new);
-		if (user.emailVerified()) {
+		User user = userMapper.findByEmail(email).orElse(null);
+		if (user == null) {
+			StructuredAuthLogger.emailVerificationFailed(email, "NOT_PENDING");
 			throw new EmailVerificationNotPendingException();
 		}
-		int resendCooldownSeconds = emailVerificationService.resendOtp(email);
+		if (user.emailVerified()) {
+			StructuredAuthLogger.emailVerificationFailed(email, "NOT_PENDING");
+			throw new EmailVerificationNotPendingException();
+		}
+		int resendCooldownSeconds;
+		try {
+			resendCooldownSeconds = emailVerificationService.resendOtp(email);
+		}
+		catch (EmailVerificationOtpResendThrottledException ex) {
+			StructuredAuthLogger.emailVerificationFailed(email, "OTP_RESEND_THROTTLED");
+			throw ex;
+		}
+		StructuredAuthLogger.emailVerificationOtpResent(user.id(), user.email());
 		return new ResendVerificationOtpResponse(resendCooldownSeconds);
 	}
 
@@ -160,9 +185,11 @@ public class AuthService {
 		User user = userMapper.findById(userId)
 				.filter(this::activeAccount)
 				.orElseThrow(InvalidCredentialsException::new);
-		return new CentralLoginTokenResponse(
+		CentralLoginTokenResponse response = new CentralLoginTokenResponse(
 				jwtService.createClientToken(user, clientId),
 				UserResponse.from(user));
+		StructuredAuthLogger.clientTokenIssued(user.id(), clientId);
+		return response;
 	}
 
 	private User authenticateUser(SigninRequest request, String clientIp) {
@@ -196,6 +223,7 @@ public class AuthService {
 				user.email(),
 				clientIp,
 				Instant.now()));
+		StructuredAuthLogger.loginSucceeded(user.id(), user.email(), clientIp);
 		return user;
 	}
 
@@ -204,6 +232,7 @@ public class AuthService {
 		refreshTokenService.revokeRefreshToken(userId, request.refreshToken());
 		revokeCurrentCentralAccessToken(userId, accessToken);
 		eventPublisher.publishEvent(new UserLoggedOutEvent(userId, false, Instant.now()));
+		StructuredAuthLogger.loggedOut(userId, false);
 		return logoutResponse();
 	}
 
@@ -213,6 +242,7 @@ public class AuthService {
 		revokeCurrentCentralAccessToken(userId, accessToken);
 		accessTokenRevocationService.revokeTokensIssuedAtOrBefore(userId, Instant.now());
 		eventPublisher.publishEvent(new UserLoggedOutEvent(userId, true, Instant.now()));
+		StructuredAuthLogger.loggedOut(userId, true);
 		return logoutResponse();
 	}
 
@@ -240,6 +270,7 @@ public class AuthService {
 
 	private void publishLoginFailed(String email, String clientIp, String reason) {
 		eventPublisher.publishEvent(new LoginFailedEvent(email, clientIp, reason, Instant.now()));
+		StructuredAuthLogger.loginFailed(email, clientIp, reason);
 	}
 
 	private void revokeCurrentCentralAccessToken(String userId, String accessToken) {
