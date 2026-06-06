@@ -1,252 +1,72 @@
 # CentralAuth
 
-CentralAuth is a full-stack centralized authentication and identity platform. It provides email/password authentication, email verification, password reset, JWT-based sessions, registered client applications, a central-login authorization-code flow, global logout propagation, admin user/client management, and audit-log visibility.
+CentralAuth is a full-stack centralized authentication and identity platform. It provides email/password authentication, email verification, password reset, JWT access tokens, refresh-token tracking, registered client applications, a central-login authorization-code flow, front-channel logout propagation, admin user/client management, structured auth logs, and optional Kafka-backed audit logs.
 
-The repository contains:
+## Contents
 
-- `CentralAuth-be`: Spring Boot 3.5.13 backend on Java 21.
-- `CentralAuth-fe`: React 19, TypeScript, Vite, and Ant Design frontend.
-- `docker-compose.yml`: local PostgreSQL, Redis, Kafka, and Kafka UI services.
+- [Repository Layout](#repository-layout)
+- [Architecture](#architecture)
+- [Local Setup](#local-setup)
+- [Configuration](#configuration)
+- [Authentication Flows](#authentication-flows)
+- [API Reference](#api-reference)
+- [Redis Usage](#redis-usage)
+- [Kafka And Audit Logs](#kafka-and-audit-logs)
+- [Structured Logging](#structured-logging)
+- [Frontend Notes](#frontend-notes)
+- [Testing](#testing)
+- [Current Limitations](#current-limitations)
 
-## Main Features
+## Repository Layout
 
-### User Registration And Email Verification
-
-- Users sign up with email, password, and optional display name.
-- Emails are normalized to lowercase before persistence.
-- Passwords are hashed with `BCryptPasswordEncoder`.
-- New users receive `ROLE_USER` and start as `UNVERIFIED`.
-- A 6-digit email verification OTP is stored in Redis with a configurable TTL.
-- Verification changes the account to `ACTIVE`, enables the user, and marks the email as verified.
-- Signup returns an auth payload, but protected routes reject the new user's token until email verification activates the account.
-- OTP resend is protected by a Redis cooldown and returns `Retry-After` on throttled requests.
-- The current implementation logs OTPs for local development instead of sending real email.
-
-### Sign In And Login Protection
-
-- Sign-in is allowed only for `ACTIVE` accounts.
-- Access tokens are JWTs signed with HS256.
-- The JWT contains issuer, subject user ID, email, roles, token use, issued-at, and expiry claims.
-- Login attempts are protected by Redis-backed rate limiting per email and client IP.
-- Repeated failed attempts trigger temporary email/IP locks.
-- Login success and failure events can be published to Kafka for auditing.
-
-### Password Reset
-
-- Users can request a password reset by email.
-- Reset tokens are opaque random tokens stored in Redis with a configurable TTL.
-- Password reset is only completed for active users.
-- Resetting a password updates the BCrypt hash and revokes all active refresh tokens for the user.
-- The current implementation logs reset tokens for local development instead of sending real email.
-
-### Sessions, Refresh Tokens, And Logout
-
-- Successful signup, sign-in, and central login produce an access token and opaque refresh token.
-- Tokens for non-active accounts are rejected by the authentication filter, so signup tokens become useful only after verification activates the account.
-- Refresh tokens are stored only as SHA-256 hashes in PostgreSQL.
-- `/api/v1/auth/logout` revokes the submitted refresh token and blacklists the current CentralAuth access token in Redis until the token expires.
-- `/api/v1/auth/logout-all-devices` revokes all active refresh tokens for the user, blacklists the current CentralAuth access token, and stores a Redis logout cutoff so older CentralAuth access tokens are rejected.
-- Logout responses include active registered client logout URIs.
-- The frontend loads logout URIs in hidden iframes to propagate browser-based front-channel logout to demo clients.
-- There is no refresh-token exchange endpoint in the current API; refresh tokens are currently issued and revoked for session tracking/logout behavior.
-
-### Registered Client Applications
-
-- Admins can create, edit, list, and activate/deactivate client applications.
-- Client metadata includes:
-  - `clientId`
-  - `clientName`
-  - redirect URIs
-  - allowed origins
-  - logout URIs
-  - active flag
-- Client IDs must match `[A-Za-z0-9._-]{1,120}`.
-- Redirect and logout URIs must be HTTP/HTTPS URIs without fragments or user info.
-- Allowed origins must be HTTP/HTTPS origins without paths, queries, fragments, user info, or wildcards.
-- Duplicate metadata entries are rejected.
-- Disabled clients cannot start central-login flows, exchange codes, or use client-scoped tokens against `/api/v1/auth/me`.
-
-### Central Login For Client Apps
-
-CentralAuth implements an OAuth-style central login flow for first-party/demo clients:
-
-1. A client sends the browser to `/signin?client_id=...&redirect_uri=...&state=...`.
-2. The frontend asks `/api/v1/auth/central-login/context` to validate the active client and exact redirect URI.
-3. The backend stores a short-lived login state in Redis and returns `loginState`.
-4. If the user is not signed in, the user signs in through `/api/v1/auth/central-login`.
-5. If the user already has a CentralAuth session, the frontend can call `/api/v1/auth/central-login/continue`.
-6. The backend consumes the login state, issues a one-time authorization code in Redis, and returns a redirect URL.
-7. The client callback validates browser state and exchanges the code at `/api/v1/auth/central-login/token`.
-8. The backend returns a client-scoped JWT with `token_use=client_access` and `aud=<clientId>`.
-
-Client-scoped JWTs are intentionally limited. They can read `/api/v1/auth/me` for the current user, but they do not grant admin access.
-
-### Demo Client Applications
-
-When `CENTRALAUTH_DEMO_CLIENTS_ENABLED=true`, the backend bootstraps two local clients:
-
-- `projects-demo`
-- `reports-demo`
-
-The frontend exposes demo routes:
-
-- `/demo/projects`
-- `/demo/projects/protected`
-- `/demo/projects/callback`
-- `/demo/projects/logout`
-- `/demo/reports`
-- `/demo/reports/protected`
-- `/demo/reports/callback`
-- `/demo/reports/logout`
-
-Each demo client stores its own client token and callback state in `localStorage`, calls the central login flow, validates callback state, exchanges authorization codes, and clears local state during front-channel logout.
-
-### Admin User Management
-
-Users with `ROLE_ADMIN` can:
-
-- List users with optional email and account status filters.
-- Limit result count from 1 to 200.
-- View user ID, email, display name, enabled flag, email verification flag, account status, roles, and timestamps.
-- Change account status to `ACTIVE`, `DISABLED`, `LOCKED`, or `UNVERIFIED`.
-
-Status changes update derived flags:
-
-- `ACTIVE`: enabled and email verified.
-- `DISABLED` or `LOCKED`: disabled and preserves current email verification.
-- `UNVERIFIED`: disabled and not email verified.
-
-Admin access can be bootstrapped with `CENTRALAUTH_ADMIN_BOOTSTRAP_EMAILS`. The configured users must already exist; the role is assigned on application startup.
-
-### Audit Logs And Events
-
-The application defines audit events for:
-
-- `USER_REGISTERED`
-- `USER_VERIFIED`
-- `LOGIN_SUCCEEDED`
-- `LOGIN_FAILED`
-- `USER_LOGGED_OUT`
-- `PASSWORD_RESET_REQUESTED`
-- `PASSWORD_CHANGED`
-- `ADMIN_USER_STATUS_CHANGED`
-
-When Kafka is enabled, authentication/admin events are published to configured topics. The audit consumer can persist consumed events to PostgreSQL with event type, user ID, email, client IP, reason, Kafka topic/key, timestamps, and JSON payload.
-
-Admins can query recent audit logs by event type, user ID, email, and limit.
-
-Kafka is disabled by default so local development and tests can run without a broker.
-
-### Frontend Application
-
-The frontend includes:
-
-- Sign-in and sign-up pages.
-- Email verification OTP screen with resend cooldown.
-- Forgot-password and reset-password screens.
-- Central-login-aware sign-in that can redirect back to registered clients.
-- Protected dashboard route.
-- Session card with user details, role tags, token preview, sign out, and sign out all devices.
-- Admin-only panels for users, client applications, and audit logs.
-- English and Vietnamese UI messages.
-- `Accept-Language` propagation on API requests.
-- Vite proxy from `/api` to `http://localhost:8080`.
-
-### API Response And Error Handling
-
-Most API responses use:
-
-```json
-{
-  "success": true,
-  "message": "Message",
-  "data": {},
-  "timestamp": "2026-05-27T00:00:00Z"
-}
+```text
+.
+|-- CentralAuth-be/       Spring Boot 3.5 backend, Java 21, MyBatis, Flyway
+|-- CentralAuth-fe/       React 19, TypeScript, Vite, Ant Design
+|-- docker-compose.yml    PostgreSQL, Redis, Kafka, Kafka UI
+|-- docs/                 Project notes and generated documentation
+`-- README.md
 ```
 
-Backend errors are centralized with `@RestControllerAdvice`. Validation, duplicate email, invalid credentials, invalid OTP/reset/code/state, throttling, login locks, inactive clients, duplicate clients, and not-found cases return structured error responses.
+## Architecture
 
-Localized backend messages are available in English and Vietnamese through `messages.properties` and `messages_vi.properties`.
+### Runtime Components
 
-## Backend API
+```text
+Browser
+  |
+  | Vite dev proxy
+  v
+React frontend
+  |
+  | REST JSON, Bearer JWT
+  v
+Spring Boot backend
+  |-- PostgreSQL: users, roles, clients, refresh token hashes, audit logs
+  |-- Redis: OTPs, reset tokens, login throttles, login state, auth codes, token revocation
+  `-- Kafka: optional auth/admin event transport for audit persistence
+```
 
-### Public Endpoints
+### Backend Responsibilities
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/api/v1/health` | Basic application health response. |
-| `POST` | `/api/v1/auth/signup` | Create user, issue verification OTP, return auth payload. |
-| `POST` | `/api/v1/auth/signin` | Authenticate active user and return JWT, refresh token, and user profile. |
-| `POST` | `/api/v1/auth/verify-email` | Verify a pending user with a 6-digit OTP. |
-| `POST` | `/api/v1/auth/resend-verification-otp` | Issue a new OTP when resend cooldown allows it. |
-| `POST` | `/api/v1/auth/forgot-password` | Issue password reset token for active account if the email exists. |
-| `POST` | `/api/v1/auth/reset-password` | Reset password with a valid reset token. |
-| `GET` | `/api/v1/auth/central-login/context` | Validate client login request and issue `loginState`. |
-| `POST` | `/api/v1/auth/central-login` | Sign in during client login and return client redirect data. |
-| `POST` | `/api/v1/auth/central-login/token` | Exchange one-time authorization code for a client-scoped JWT. |
+- `auth`: signup, signin, verification, password reset, logout, central-login flow, structured auth logs.
+- `security`: stateless Spring Security, JWT validation, token-use checks, token revocation.
+- `client`: registered client validation, redirect/logout URI validation, demo client bootstrap.
+- `admin`: user status management, client application management, admin bootstrap.
+- `event`: Spring application events and optional Kafka publisher.
+- `audit`: optional Kafka consumer and audit-log query API.
+- `common`: response wrapper, global exception handling, localization, client IP resolution.
 
-### Authenticated User Endpoints
+### Frontend Responsibilities
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/api/v1/auth/me` | Return current user for CentralAuth JWTs and valid client-scoped JWTs. |
-| `GET` | `/api/v1/users/me` | Return current user for authenticated CentralAuth sessions. |
-| `POST` | `/api/v1/auth/central-login/continue` | Continue a client login with the current CentralAuth session. |
-| `POST` | `/api/v1/auth/logout` | Revoke submitted refresh token and blacklist current access token. |
-| `POST` | `/api/v1/auth/logout-all-devices` | Revoke all refresh tokens and reject older access tokens for the user. |
+- Auth routes: `/signin`, `/signup`, `/verify-email`, `/forgot-password`, `/reset-password`.
+- Protected routes: `/dashboard`, `/profile`.
+- Demo client routes: `/demo/projects/*`, `/demo/reports/*`.
+- Auth state: `AuthSessionContext` stores access and refresh tokens in `localStorage`, restores the current user through `/api/v1/auth/me`, exposes operation state, and clears invalid sessions.
+- Protected routing: unauthenticated users are redirected to `/signin` with return-location state.
+- Logout propagation: CentralAuth loads registered client logout URIs in hidden iframes so demo clients can clear browser-side session state.
 
-### Admin Endpoints
-
-All admin endpoints require `ROLE_ADMIN`.
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/api/v1/admin/users` | List users with optional `email`, `status`, and `limit` filters. |
-| `GET` | `/api/v1/admin/users/{id}` | Get one user by ID. |
-| `PATCH` | `/api/v1/admin/users/{id}/status` | Change account status. |
-| `GET` | `/api/v1/admin/clients` | List registered client applications. |
-| `POST` | `/api/v1/admin/clients` | Create a client application. |
-| `PUT` | `/api/v1/admin/clients/{clientId}` | Replace client metadata. |
-| `PATCH` | `/api/v1/admin/clients/{clientId}/active` | Toggle client active status. |
-| `GET` | `/api/v1/audit-logs` | Query recent audit logs with optional `eventType`, `userId`, `email`, and `limit`. |
-
-## Data Stores
-
-### PostgreSQL
-
-Flyway migrations create and update:
-
-- `users`
-- `user_roles`
-- `refresh_tokens`
-- `audit_logs`
-- `clients`
-- `client_redirect_uris`
-- `client_allowed_origins`
-- `client_logout_uris`
-
-MyBatis XML mappers handle database access.
-
-### Redis
-
-Redis stores transient security state:
-
-- email verification OTPs
-- OTP resend throttle keys
-- password reset tokens
-- login attempt counters
-- temporary login locks
-- central-login state
-- one-time authorization codes
-- access-token blacklist entries
-- logout-all-devices cutoff timestamps
-
-### Kafka
-
-Kafka is optional and disabled by default. When enabled, authentication/admin events are published to topics under `centralauth.kafka.topics.*`, and the audit consumer can persist them to `audit_logs`.
-
-## Local Development
+## Local Setup
 
 ### Prerequisites
 
@@ -256,55 +76,46 @@ Kafka is optional and disabled by default. When enabled, authentication/admin ev
 
 ### Start Infrastructure
 
-Start PostgreSQL and Redis:
+Start the services needed for normal auth development:
 
 ```sh
 docker compose up -d postgres redis
 ```
 
-Start Kafka and Kafka UI only when testing the Kafka audit pipeline:
+Start Kafka only when testing the event/audit pipeline:
 
 ```sh
 docker compose up -d kafka kafka-ui
 ```
 
-Kafka UI is available at `http://localhost:8081`.
+Local service ports:
 
-### Configure The Backend
 
-The backend imports an optional `.env` file from the repository root when run from `CentralAuth-be`.
+| Service    | URL                     |
+| ---------- | ----------------------- |
+| Backend    | `http://localhost:8080` |
+| Frontend   | `http://localhost:5173` |
+| PostgreSQL | `localhost:5432`        |
+| Redis      | `localhost:6379`        |
+| Kafka      | `localhost:9092`        |
+| Kafka UI   | `http://localhost:8081` |
 
-Create `.env` locally if needed:
-
-```properties
-DATASOURCE_URL=jdbc:postgresql://localhost:5432/centralauth
-DATASOURCE_USERNAME=centralauth
-DATASOURCE_PASSWORD=centralauth
-CENTRALAUTH_REDIS_HOST=localhost
-CENTRALAUTH_REDIS_PORT=6379
-CENTRALAUTH_JWT_SECRET=replace-with-a-long-random-secret
-CENTRALAUTH_KAFKA_ENABLED=false
-```
-
-The `.env` file is ignored by git.
 
 ### Run Backend
 
-On Windows:
+Windows:
 
 ```sh
 cd CentralAuth-be
 .\mvnw.cmd spring-boot:run
 ```
 
-On macOS/Linux:
+macOS/Linux:
 
 ```sh
 cd CentralAuth-be
 ./mvnw spring-boot:run
 ```
-
-The backend runs on `http://localhost:8080` by default.
 
 ### Run Frontend
 
@@ -314,49 +125,310 @@ npm install
 npm run dev
 ```
 
-The frontend runs on `http://localhost:5173` by default.
+Vite proxies `/api` to `http://localhost:8080`.
 
-## Configuration Reference
+## Authentication Flows
 
-| Variable | Purpose | Default |
-| --- | --- | --- |
-| `PORT` | Backend HTTP port. | `8080` |
-| `DATASOURCE_URL` | PostgreSQL JDBC URL. | `jdbc:postgresql://localhost:5432/centralAuth` |
-| `DATASOURCE_USERNAME` | PostgreSQL username. | `centralauth` |
-| `DATASOURCE_PASSWORD` | PostgreSQL password. | `centralauth` |
-| `CENTRALAUTH_REDIS_HOST` | Redis host. | `localhost` |
-| `CENTRALAUTH_REDIS_PORT` | Redis port. | `6379` |
-| `CENTRALAUTH_REDIS_PASSWORD` | Redis password. | empty |
-| `CENTRALAUTH_JWT_SECRET` | HS256 signing secret. Use a strong secret outside local dev. | development value |
-| `CENTRALAUTH_JWT_ISSUER` | JWT issuer claim. | `central-auth` |
-| `CENTRALAUTH_JWT_EXPIRES_IN_SECONDS` | Access-token lifetime. | `3600` |
-| `CENTRALAUTH_REFRESH_TOKEN_EXPIRES_IN_SECONDS` | Refresh-token lifetime. | `2592000` |
-| `CENTRALAUTH_EMAIL_VERIFICATION_OTP_TTL` | Email OTP lifetime. | `10m` |
-| `CENTRALAUTH_EMAIL_VERIFICATION_RESEND_COOLDOWN` | OTP resend cooldown. | `60s` |
-| `CENTRALAUTH_PASSWORD_RESET_TOKEN_TTL` | Password reset token lifetime. | `15m` |
-| `CENTRALAUTH_LOGIN_PROTECTION_MAX_FAILED_ATTEMPTS` | Failed attempts before temporary lock. | `5` |
-| `CENTRALAUTH_LOGIN_PROTECTION_FAILURE_WINDOW` | Failure counting window. | `15m` |
-| `CENTRALAUTH_LOGIN_PROTECTION_LOCK_DURATION` | Temporary lock duration. | `15m` |
-| `CENTRALAUTH_LOGIN_RATE_LIMIT_MAX_ATTEMPTS` | Max attempts per rate window. | `10` |
-| `CENTRALAUTH_LOGIN_RATE_LIMIT_WINDOW` | Login rate-limit window. | `1m` |
-| `CENTRALAUTH_ADMIN_BOOTSTRAP_EMAILS` | Comma-separated emails to receive `ROLE_ADMIN` at startup if users exist. | empty |
-| `CENTRALAUTH_DEMO_CLIENTS_ENABLED` | Bootstrap local demo clients. | `true` |
-| `CENTRALAUTH_KAFKA_ENABLED` | Enable Kafka publisher/consumer beans. | `false` |
-| `CENTRALAUTH_KAFKA_AUDIT_ENABLED` | Auto-start audit Kafka listener when Kafka is enabled. | `true` |
-| `CENTRALAUTH_KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap servers. | `localhost:9092` |
+### Signup And Email Verification
+
+1. `POST /api/v1/auth/signup` creates a user with normalized lowercase email.
+2. Passwords are hashed with `BCryptPasswordEncoder`.
+3. The user receives `ROLE_USER` and starts with `accountStatus=UNVERIFIED`.
+4. A six-digit OTP is stored in Redis under `email-verification:<email>`.
+5. `POST /api/v1/auth/verify-email` validates the OTP, consumes it, and activates the account.
+6. `POST /api/v1/auth/resend-verification-otp` issues a new OTP when the Redis cooldown allows it.
+
+Signup returns tokens immediately, but protected backend routes still reject the user until email verification activates the account.
+
+For local development, there is no email delivery adapter yet. Inspect Redis when you need a generated OTP:
+
+```sh
+docker exec centralauth-redis redis-cli GET email-verification:user@example.com
+```
+
+### Signin And Login Protection
+
+1. `POST /api/v1/auth/signin` authenticates active users only.
+2. Login attempts are counted in Redis per email and per client IP.
+3. Too many attempts in the rate window returns `429 Too Many Requests`.
+4. Too many failures creates temporary email/IP lock keys in Redis.
+5. Successful signin returns:
+  - CentralAuth JWT access token
+  - opaque refresh token
+  - current user profile
+
+JWTs include issuer, subject user ID, email, roles, token use, issued-at, and expiry. Client-scoped JWTs also include the client audience.
+
+### Password Reset
+
+1. `POST /api/v1/auth/forgot-password` accepts an email and silently succeeds.
+2. If the account exists and is active, a random reset token is stored in Redis as `password-reset:<token>`.
+3. `POST /api/v1/auth/reset-password` consumes the token, updates the BCrypt password hash, and revokes all active refresh tokens.
+
+For local development, inspect Redis when you need a generated reset token:
+
+```sh
+docker exec centralauth-redis redis-cli --scan --pattern "password-reset:*"
+```
+
+### Central Login For Client Apps
+
+CentralAuth implements an OAuth-style first-party client login flow:
+
+1. A client sends the browser to `/signin?client_id=...&redirect_uri=...&state=...`.
+2. The frontend calls `GET /api/v1/auth/central-login/context`.
+3. The backend validates the active client and exact redirect URI, then stores a short-lived `loginState` in Redis.
+4. If the user is not signed in, the frontend posts credentials to `POST /api/v1/auth/central-login`.
+5. If the user already has a CentralAuth session, the frontend posts to `POST /api/v1/auth/central-login/continue`.
+6. The backend consumes `loginState`, stores a one-time authorization code in Redis, and returns a redirect URL.
+7. The client callback validates browser state and exchanges the code through `POST /api/v1/auth/central-login/token`.
+8. The backend returns a client-scoped JWT with `token_use=client_access` and `aud=<clientId>`.
+
+Client-scoped JWTs can call `/api/v1/auth/me`; they do not grant admin access.
+
+### Logout
+
+- `POST /api/v1/auth/logout` revokes one refresh token and blacklists the current CentralAuth access token until it expires.
+- `POST /api/v1/auth/logout-all-devices` revokes all active refresh tokens, blacklists the current token, and stores a Redis cutoff so older CentralAuth access tokens are rejected.
+- Logout responses include active registered client logout URIs.
+- The frontend loads those logout URIs in hidden iframes to propagate front-channel logout to demo clients.
+
+There is no access-token refresh endpoint yet. Refresh tokens are currently issued and revoked for session tracking and logout behavior.
+
+## API Reference
+
+All API responses use the common wrapper unless noted:
+
+```json
+{
+  "success": true,
+  "message": "Message",
+  "data": {},
+  "timestamp": "2026-06-06T00:00:00Z"
+}
+```
+
+Backend errors are centralized through `@RestControllerAdvice` and return the same wrapper with `success=false`.
+
+### Public Endpoints
+
+
+| Method | Path                                   | Body / Query                                                                   | Response Data                                                  | Purpose                                       |
+| ------ | -------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------- | --------------------------------------------- |
+| `GET`  | `/api/v1/health`                       | none                                                                           | health payload                                                 | Basic health response.                        |
+| `POST` | `/api/v1/auth/signup`                  | `email`, `password`, optional `displayName`                                    | `token`, `refreshToken`, `user`                                | Create an unverified user and issue OTP.      |
+| `POST` | `/api/v1/auth/signin`                  | `email`, `password`                                                            | `token`, `refreshToken`, `user`                                | Sign in an active user.                       |
+| `POST` | `/api/v1/auth/verify-email`            | `email`, `otp`                                                                 | `null`                                                         | Verify pending user email.                    |
+| `POST` | `/api/v1/auth/resend-verification-otp` | `email`                                                                        | `resendCooldownSeconds`                                        | Resend verification OTP.                      |
+| `POST` | `/api/v1/auth/forgot-password`         | `email`                                                                        | `null`                                                         | Request password reset.                       |
+| `POST` | `/api/v1/auth/reset-password`          | `token`, `newPassword`                                                         | `null`                                                         | Reset password with opaque token.             |
+| `GET`  | `/api/v1/auth/central-login/context`   | `client_id`, `redirect_uri`, optional `state`                                  | `clientId`, `clientName`, `redirectUri`, `state`, `loginState` | Validate client login request.                |
+| `POST` | `/api/v1/auth/central-login`           | `email`, `password`, `clientId`, `redirectUri`, optional `state`, `loginState` | redirect data plus `auth`                                      | Sign in during central login.                 |
+| `POST` | `/api/v1/auth/central-login/token`     | `code`, `clientId`, `redirectUri`                                              | `token`, `user`                                                | Exchange one-time code for client-scoped JWT. |
+
+
+### Authenticated User Endpoints
+
+These endpoints require `Authorization: Bearer <token>`.
+
+
+| Method | Path                                  | Body                                                      | Response Data                                 | Purpose                                                        |
+| ------ | ------------------------------------- | --------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------- |
+| `GET`  | `/api/v1/auth/me`                     | none                                                      | `id`, `email`, `displayName`, `emailVerified` | Return current user for CentralAuth or client-scoped JWTs.     |
+| `GET`  | `/api/v1/users/me`                    | none                                                      | `id`, `email`, `displayName`, `emailVerified` | Return current user for authenticated CentralAuth sessions.    |
+| `POST` | `/api/v1/auth/central-login/continue` | `clientId`, `redirectUri`, optional `state`, `loginState` | redirect data                                 | Continue client login from current CentralAuth session.        |
+| `POST` | `/api/v1/auth/logout`                 | `refreshToken`                                            | `logoutUris`                                  | Revoke current refresh token and current access token.         |
+| `POST` | `/api/v1/auth/logout-all-devices`     | none                                                      | `logoutUris`                                  | Revoke all refresh tokens and older CentralAuth access tokens. |
+
+
+### Admin Endpoints
+
+Admin endpoints require a CentralAuth JWT with `ROLE_ADMIN`.
+
+
+| Method  | Path                                      | Body / Query                                                                                | Purpose                                                                |
+| ------- | ----------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `GET`   | `/api/v1/admin/users`                     | optional `email`, `status`, `limit`                                                         | List users.                                                            |
+| `GET`   | `/api/v1/admin/users/{id}`                | none                                                                                        | Get one user.                                                          |
+| `PATCH` | `/api/v1/admin/users/{id}/status`         | `status`                                                                                    | Change user status to `ACTIVE`, `DISABLED`, `LOCKED`, or `UNVERIFIED`. |
+| `GET`   | `/api/v1/admin/clients`                   | none                                                                                        | List client applications.                                              |
+| `POST`  | `/api/v1/admin/clients`                   | `clientId`, `clientName`, `redirectUris`, `allowedOrigins`, `logoutUris`, optional `active` | Create client application.                                             |
+| `PUT`   | `/api/v1/admin/clients/{clientId}`        | `clientName`, `redirectUris`, `allowedOrigins`, `logoutUris`, `active`                      | Replace client metadata.                                               |
+| `PATCH` | `/api/v1/admin/clients/{clientId}/active` | `active`                                                                                    | Toggle client active flag.                                             |
+| `GET`   | `/api/v1/audit-logs`                      | optional `eventType`, `userId`, `email`, `limit`                                            | Query recent audit logs.                                               |
+
+
+## Redis Usage
+
+Redis stores only transient security state. PostgreSQL remains the durable store for users, roles, client metadata, refresh-token hashes, and audit logs.
+
+
+| Key Pattern                         | Producer                       | Purpose                                        |
+| ----------------------------------- | ------------------------------ | ---------------------------------------------- |
+| `email-verification:<email>`        | `EmailVerificationService`     | Six-digit verification OTP with TTL.           |
+| `email-verification-resend:<email>` | `EmailVerificationService`     | OTP resend cooldown marker.                    |
+| `password-reset:<token>`            | `PasswordResetService`         | Opaque password-reset token mapped to user ID. |
+| `login-rate:email:<email>`          | `LoginAttemptService`          | Email login rate counter.                      |
+| `login-rate:ip:<ip>`                | `LoginAttemptService`          | IP login rate counter.                         |
+| `login-failure:email:<email>`       | `LoginAttemptService`          | Failed login counter by email.                 |
+| `login-failure:ip:<ip>`             | `LoginAttemptService`          | Failed login counter by IP.                    |
+| `login-lock:email:<email>`          | `LoginAttemptService`          | Temporary email lock marker.                   |
+| `login-lock:ip:<ip>`                | `LoginAttemptService`          | Temporary IP lock marker.                      |
+| `auth_state:<loginState>`           | `CentralLoginStateService`     | Central-login request context.                 |
+| `auth_code:<code>`                  | `AuthorizationCodeService`     | One-time code exchange context.                |
+| `jwt:blacklist:<hash>`              | `AccessTokenRevocationService` | Revoked access token until JWT expiry.         |
+| `jwt:user-logout-after:<userId>`    | `AccessTokenRevocationService` | Logout-all-devices cutoff timestamp.           |
+
+
+Useful local Redis commands:
+
+```sh
+docker exec centralauth-redis redis-cli --scan --pattern "email-verification:*"
+docker exec centralauth-redis redis-cli --scan --pattern "password-reset:*"
+docker exec centralauth-redis redis-cli TTL email-verification:user@example.com
+```
+
+## Kafka And Audit Logs
+
+Kafka is optional and disabled by default so local development and tests can run without a broker.
+
+Enable it with:
+
+```properties
+CENTRALAUTH_KAFKA_ENABLED=true
+CENTRALAUTH_KAFKA_AUDIT_ENABLED=true
+CENTRALAUTH_KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+```
+
+### Published Events
+
+When `CENTRALAUTH_KAFKA_ENABLED=true`, `AuthEventKafkaPublisher` listens to Spring application events and publishes them to Kafka.
+
+
+| Event                         | Topic Property                                       | Default Topic                        | Kafka Key |
+| ----------------------------- | ---------------------------------------------------- | ------------------------------------ | --------- |
+| `UserRegisteredEvent`         | `centralauth.kafka.topics.user-registered`           | `auth.user.registered`               | user ID   |
+| `UserVerifiedEvent`           | `centralauth.kafka.topics.user-verified`             | `auth.user.verified`                 | user ID   |
+| `LoginSucceededEvent`         | `centralauth.kafka.topics.login-succeeded`           | `auth.user.login.succeeded`          | user ID   |
+| `LoginFailedEvent`            | `centralauth.kafka.topics.login-failed`              | `auth.user.login.failed`             | email     |
+| `UserLoggedOutEvent`          | `centralauth.kafka.topics.logout`                    | `auth.user.logout`                   | user ID   |
+| `PasswordResetRequestedEvent` | `centralauth.kafka.topics.password-reset-requested`  | `auth.user.password.reset.requested` | user ID   |
+| `PasswordChangedEvent`        | `centralauth.kafka.topics.password-changed`          | `auth.user.password.changed`         | user ID   |
+| `AdminUserStatusChangedEvent` | `centralauth.kafka.topics.admin-user-status-changed` | `auth.admin.user.status.changed`     | user ID   |
+
+
+Most events publish after the surrounding transaction commits. Login failures are published immediately because they may occur before a successful transaction exists.
+
+### Audit Persistence
+
+When Kafka and the audit listener are enabled, `AuditLogConsumer` consumes all auth/admin topics and `AuditLogService` persists:
+
+- normalized event type
+- user ID where available
+- email where available
+- client IP for login events
+- reason for failed login or admin status transition
+- event occurrence time
+- Kafka topic and key
+- serialized JSON payload
+
+Admins query persisted audit records through `GET /api/v1/audit-logs`.
+
+## Structured Logging
+
+Auth actions also emit runtime structured logs through `StructuredAuthLogger` using SLF4J key-value logging. These logs are for observability and are separate from durable audit persistence.
+
+Logged fields use stable names:
+
+- `event`
+- `outcome`
+- `userId`
+- `email`
+- `clientIp`
+- `clientId`
+- `reason`
+- `allDevices`
+
+Logged auth events include registration, email verification, OTP resend, password reset request/change, login success/failure, logout, central-login code issuance, and client-token issuance.
+
+Sensitive values are not logged:
+
+- passwords
+- OTP values
+- password reset tokens
+- JWTs
+- refresh tokens
+- authorization codes
+- central-login state values
+
+Example local log shape:
+
+```text
+event="auth.login" outcome="failure" email="user@example.com" clientIp="203.0.113.12" reason="INVALID_CREDENTIALS" auth action
+```
+
+## Frontend Notes
+
+### Auth State
+
+The frontend stores:
+
+- access token under `centralauth.token`
+- refresh token under `centralauth.refreshToken`
+- demo client tokens and callback state under client-specific `centralauth.demo.*` keys
+
+On app load, `AuthSessionContext` restores the current user with `/api/v1/auth/me`. If restore fails, it clears stored auth state and exposes a localized session-expired message.
+
+### Routes
+
+
+| Route                      | Purpose                                            |
+| -------------------------- | -------------------------------------------------- |
+| `/signin`                  | Sign in, including central-login query parameters. |
+| `/signup`                  | Create account.                                    |
+| `/verify-email`            | Submit verification OTP and resend OTP.            |
+| `/forgot-password`         | Request password reset.                            |
+| `/reset-password`          | Submit reset token and new password.               |
+| `/dashboard`               | Protected user dashboard.                          |
+| `/profile`                 | Protected current-user profile page.               |
+| `/demo/projects`           | Projects demo client public page.                  |
+| `/demo/projects/protected` | Projects demo protected page.                      |
+| `/demo/projects/callback`  | Projects demo central-login callback.              |
+| `/demo/projects/logout`    | Projects demo front-channel logout endpoint.       |
+| `/demo/reports`            | Reports demo client public page.                   |
+| `/demo/reports/protected`  | Reports demo protected page.                       |
+| `/demo/reports/callback`   | Reports demo central-login callback.               |
+| `/demo/reports/logout`     | Reports demo front-channel logout endpoint.        |
+
+
+### Demo Clients
+
+When `CENTRALAUTH_DEMO_CLIENTS_ENABLED=true`, the backend registers:
+
+- `projects-demo`
+- `reports-demo`
+
+Each demo client is registered for local origins `localhost` and `127.0.0.1` on ports `5173`, `5174`, and `5175`, with matching callback and logout URIs.
 
 ## Testing
 
 ### Backend
+
+Windows:
 
 ```sh
 cd CentralAuth-be
 .\mvnw.cmd test
 ```
 
-Use `./mvnw test` on macOS/Linux.
+macOS/Linux:
 
-Backend tests cover authentication, JWT validation, JWT filter behavior, refresh-token persistence, admin users, admin clients, audit logs, Kafka toggles, Flyway migrations, and demo client bootstrapping.
+```sh
+cd CentralAuth-be
+./mvnw test
+```
+
+Backend tests cover auth flows, JWT validation, JWT filter behavior, refresh-token persistence, admin users, admin clients, audit logs, Kafka toggles, structured auth logging, Flyway migrations, and demo client bootstrapping.
 
 ### Frontend
 
@@ -366,19 +438,17 @@ npm run lint
 npm run test
 ```
 
-Frontend unit tests cover demo auth helpers and front-channel logout behavior.
+Frontend tests cover auth session state and demo client helpers.
 
 ### Browser E2E
 
-The frontend includes a Playwright scaffold for the demo client flow.
+The Playwright demo flow expects:
 
-Prerequisites:
-
-- Backend running on `http://localhost:8080`.
-- Frontend running on `http://localhost:5173`.
-- Redis available to the backend.
-- Demo clients enabled so `projects-demo` and `reports-demo` are registered.
-- An active, verified user supplied through `E2E_EMAIL` and `E2E_PASSWORD`.
+- backend running on `http://localhost:8080`
+- frontend running on `http://localhost:5173`
+- Redis available to the backend
+- demo clients enabled
+- an active verified user in `E2E_EMAIL` and `E2E_PASSWORD`
 
 Run:
 
@@ -391,7 +461,7 @@ Override the frontend URL with `E2E_BASE_URL` when needed.
 
 ## Current Limitations
 
-- OTP and password reset delivery is development-oriented and logs secrets instead of sending real email.
-- The current API issues and revokes refresh tokens, but does not expose an access-token refresh endpoint.
+- Email verification and password reset tokens are generated and stored, but there is no email delivery integration yet.
+- The API issues and revokes refresh tokens, but does not expose an access-token refresh endpoint yet.
 - Logout propagation is front-channel iframe based. There is no back-channel logout or token introspection endpoint yet.
-- Kafka-backed audit logging is disabled by default and must be explicitly enabled for event persistence through Kafka.
+- Kafka-backed audit persistence is disabled by default and must be explicitly enabled.
