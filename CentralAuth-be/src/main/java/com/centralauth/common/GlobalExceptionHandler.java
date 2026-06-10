@@ -16,6 +16,7 @@ import com.centralauth.auth.exception.InvalidCentralLoginStateException;
 import com.centralauth.auth.exception.InvalidEmailVerificationOtpException;
 import com.centralauth.auth.exception.InvalidCredentialsException;
 import com.centralauth.auth.exception.InvalidPasswordResetTokenException;
+import com.centralauth.auth.exception.InvalidRefreshTokenException;
 import com.centralauth.auth.login.LoginRateLimitExceededException;
 import com.centralauth.auth.login.LoginTemporarilyLockedException;
 import com.centralauth.client.ClientApplicationNotFoundException;
@@ -55,6 +56,11 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(InvalidPasswordResetTokenException.class)
 	public ResponseEntity<ApiResponse<Void>> handleInvalidPasswordResetToken(InvalidPasswordResetTokenException ex) {
 		return error(messages.get(ex), HttpStatus.BAD_REQUEST);
+	}
+
+	@ExceptionHandler(InvalidRefreshTokenException.class)
+	public ResponseEntity<ApiResponse<Void>> handleInvalidRefreshToken(InvalidRefreshTokenException ex) {
+		return error(messages.get(ex), HttpStatus.UNAUTHORIZED);
 	}
 
 	@ExceptionHandler(InvalidAuthorizationCodeException.class)
