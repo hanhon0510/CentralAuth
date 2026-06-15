@@ -26,6 +26,7 @@ import com.centralauth.auth.dto.LogoutResponse;
 import com.centralauth.auth.dto.LogoutRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpResponse;
+import com.centralauth.auth.dto.RefreshTokenRequest;
 import com.centralauth.auth.dto.ResetPasswordRequest;
 import com.centralauth.auth.dto.SigninRequest;
 import com.centralauth.auth.dto.SignupRequest;
@@ -67,6 +68,11 @@ public class AuthController {
 		return ApiResponse.success(
 				messages.get("auth.signin.success"),
 				authService.signin(request, clientIpResolver.resolve(httpRequest)));
+	}
+
+	@PostMapping("/refresh")
+	public ApiResponse<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+		return ApiResponse.success(messages.get("auth.refresh.success"), authService.refresh(request));
 	}
 
 	@GetMapping("/central-login/context")

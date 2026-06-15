@@ -18,6 +18,7 @@ import com.centralauth.auth.dto.LogoutResponse;
 import com.centralauth.auth.dto.LogoutRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpRequest;
 import com.centralauth.auth.dto.ResendVerificationOtpResponse;
+import com.centralauth.auth.dto.RefreshTokenRequest;
 import com.centralauth.auth.dto.ResetPasswordRequest;
 import com.centralauth.auth.dto.SigninRequest;
 import com.centralauth.auth.dto.SignupRequest;
@@ -28,11 +29,13 @@ import com.centralauth.auth.exception.EmailVerificationNotPendingException;
 import com.centralauth.auth.exception.EmailVerificationOtpResendThrottledException;
 import com.centralauth.auth.exception.InvalidCredentialsException;
 import com.centralauth.auth.exception.InvalidEmailVerificationOtpException;
+import com.centralauth.auth.exception.InvalidRefreshTokenException;
 import com.centralauth.auth.login.LoginAttemptService;
 import com.centralauth.auth.login.LoginRateLimitExceededException;
 import com.centralauth.auth.login.LoginTemporarilyLockedException;
 import com.centralauth.auth.logging.StructuredAuthLogger;
 import com.centralauth.auth.password.PasswordResetService;
+import com.centralauth.auth.token.RefreshToken;
 import com.centralauth.auth.token.RefreshTokenService;
 import com.centralauth.auth.verification.EmailVerificationService;
 import com.centralauth.client.ClientApplicationService;
@@ -178,6 +181,19 @@ public class AuthService {
 	@Transactional
 	public AuthResponse signin(SigninRequest request, String clientIp) {
 		return toAuthResponse(authenticateUser(request, clientIp));
+	}
+
+	@Transactional
+	public AuthResponse refresh(RefreshTokenRequest request) {
+		RefreshToken refreshToken = refreshTokenService.requireActiveRefreshToken(request.refreshToken());
+		User user = userMapper.findById(refreshToken.userId())
+				.filter(this::activeAccount)
+				.orElseThrow(InvalidRefreshTokenException::new);
+		String rotatedRefreshToken = refreshTokenService.rotateRefreshToken(refreshToken);
+		return new AuthResponse(
+				jwtService.createToken(user, rolesFor(user.id())),
+				rotatedRefreshToken,
+				UserResponse.from(user));
 	}
 
 	@Transactional

@@ -10,6 +10,11 @@ import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import com.centralauth.auth.exception.InvalidRefreshTokenException;
 
 @Service
 public class RefreshTokenService {
@@ -20,12 +25,16 @@ public class RefreshTokenService {
 
 	private final RefreshTokenMapper refreshTokenMapper;
 	private final SecureRandom secureRandom = new SecureRandom();
+	private final TransactionTemplate replayRevocationTransactionTemplate;
 	private final long expiresInSeconds;
 
 	public RefreshTokenService(
 			RefreshTokenMapper refreshTokenMapper,
+			PlatformTransactionManager transactionManager,
 			@Value("${centralauth.refresh-token.expires-in-seconds:2592000}") long expiresInSeconds) {
 		this.refreshTokenMapper = refreshTokenMapper;
+		this.replayRevocationTransactionTemplate = new TransactionTemplate(transactionManager);
+		this.replayRevocationTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 		this.expiresInSeconds = expiresInSeconds;
 	}
 
@@ -51,6 +60,36 @@ public class RefreshTokenService {
 
 	public void revokeAllActiveRefreshTokens(String userId) {
 		refreshTokenMapper.revokeAllActiveForUser(userId, Instant.now());
+	}
+
+	public RefreshToken requireActiveRefreshToken(String refreshToken) {
+		if (refreshToken == null || refreshToken.isBlank()) {
+			throw new InvalidRefreshTokenException();
+		}
+		Instant now = Instant.now();
+		RefreshToken saved = refreshTokenMapper.findByTokenHash(hashToken(refreshToken))
+				.orElseThrow(InvalidRefreshTokenException::new);
+		if (saved.revoked()) {
+			revokeAllActiveRefreshTokensAfterReplay(saved.userId());
+			throw new InvalidRefreshTokenException();
+		}
+		if (!saved.expiresAt().isAfter(now)) {
+			throw new InvalidRefreshTokenException();
+		}
+		return saved;
+	}
+
+	public String rotateRefreshToken(RefreshToken refreshToken) {
+		if (refreshTokenMapper.revoke(refreshToken.id(), Instant.now()) == 0) {
+			revokeAllActiveRefreshTokensAfterReplay(refreshToken.userId());
+			throw new InvalidRefreshTokenException();
+		}
+		return issueRefreshToken(refreshToken.userId());
+	}
+
+	private void revokeAllActiveRefreshTokensAfterReplay(String userId) {
+		replayRevocationTransactionTemplate.executeWithoutResult(status ->
+				refreshTokenMapper.revokeAllActiveForUser(userId, Instant.now()));
 	}
 
 	private String createOpaqueToken() {

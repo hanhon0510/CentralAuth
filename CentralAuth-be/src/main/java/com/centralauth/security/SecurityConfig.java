@@ -41,6 +41,7 @@ public class SecurityConfig {
 								"/api/v1/auth/resend-verification-otp",
 								"/api/v1/auth/forgot-password",
 								"/api/v1/auth/reset-password",
+								"/api/v1/auth/refresh",
 								"/actuator/health",
 								"/actuator/info").permitAll()
 						.requestMatchers("/api/v1/admin/**").hasAuthority("ROLE_ADMIN")

@@ -21,9 +21,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -237,6 +240,20 @@ class AuthControllerIntegrationTests {
 				  and rt.revoked = false
 				  and rt.expires_at > current_timestamp
 				""", Integer.class, email);
+	}
+
+	private boolean refreshTokenRevoked(String refreshToken) throws Exception {
+		return jdbcTemplate.queryForObject("""
+				select revoked
+				from refresh_tokens
+				where token_hash = ?
+				""", Boolean.class, hashRefreshToken(refreshToken));
+	}
+
+	private String hashRefreshToken(String token) throws Exception {
+		byte[] hash = MessageDigest.getInstance("SHA-256")
+				.digest(token.getBytes(StandardCharsets.UTF_8));
+		return "sha256:" + Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
 	}
 
 	private void insertClient(String clientId, String clientName, String redirectUri) {
@@ -1190,6 +1207,137 @@ class AuthControllerIntegrationTests {
 				  and rt.revoked = false
 				  and rt.token_hash <> ?
 				""", Integer.class, "signin-refresh@example.com", refreshToken)).isGreaterThanOrEqualTo(1);
+	}
+
+	@Test
+	void refreshRotatesActiveRefreshToken() throws Exception {
+		String email = "refresh-rotate@example.com";
+		signupAndVerify(email);
+		MvcResult signin = signin(email, "Password123!");
+		String originalRefreshToken = refreshTokenFrom(signin);
+		int activeBeforeRefresh = activeRefreshTokenCount(email);
+
+		MvcResult refresh = mockMvc().perform(post("/api/v1/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"refreshToken":"%s"}
+								""".formatted(originalRefreshToken)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.message").value("Session refreshed"))
+				.andExpect(jsonPath("$.data.token", not(blankOrNullString())))
+				.andExpect(jsonPath("$.data.refreshToken", not(blankOrNullString())))
+				.andExpect(jsonPath("$.data.user.email").value(email))
+				.andReturn();
+
+		String rotatedRefreshToken = refreshTokenFrom(refresh);
+		assertThat(rotatedRefreshToken).isNotEqualTo(originalRefreshToken);
+		assertThat(refreshTokenRevoked(originalRefreshToken)).isTrue();
+		assertThat(refreshTokenRevoked(rotatedRefreshToken)).isFalse();
+		assertThat(activeRefreshTokenCount(email)).isEqualTo(activeBeforeRefresh);
+		JwtPrincipal principal = jwtService.validate(tokenFrom(refresh)).orElseThrow();
+		assertThat(principal.userId()).isEqualTo(userIdFor(email));
+	}
+
+	@Test
+	void refreshRejectsReusedRefreshToken() throws Exception {
+		String email = "refresh-reuse@example.com";
+		signupAndVerify(email);
+		MvcResult signin = signin(email, "Password123!");
+		String originalRefreshToken = refreshTokenFrom(signin);
+
+		mockMvc().perform(post("/api/v1/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"refreshToken":"%s"}
+								""".formatted(originalRefreshToken)))
+				.andExpect(status().isOk());
+
+		mockMvc().perform(post("/api/v1/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"refreshToken":"%s"}
+								""".formatted(originalRefreshToken)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Invalid or expired refresh token"));
+	}
+
+	@Test
+	void refreshTokenReuseRevokesRemainingActiveTokensForUser() throws Exception {
+		String email = "refresh-reuse-revokes@example.com";
+		signupAndVerify(email);
+		MvcResult signin = signin(email, "Password123!");
+		String originalRefreshToken = refreshTokenFrom(signin);
+		MvcResult refresh = mockMvc().perform(post("/api/v1/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"refreshToken":"%s"}
+								""".formatted(originalRefreshToken)))
+				.andExpect(status().isOk())
+				.andReturn();
+		String rotatedRefreshToken = refreshTokenFrom(refresh);
+
+		mockMvc().perform(post("/api/v1/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"refreshToken":"%s"}
+								""".formatted(originalRefreshToken)))
+				.andExpect(status().isUnauthorized());
+
+		assertThat(activeRefreshTokenCount(email)).isZero();
+		assertThat(refreshTokenRevoked(rotatedRefreshToken)).isTrue();
+	}
+
+	@Test
+	void refreshRejectsInactiveOrMissingUsers() throws Exception {
+		assertRefreshRejectedAfterAccountStatusChange("refresh-disabled@example.com", "DISABLED");
+		assertRefreshRejectedAfterAccountStatusChange("refresh-locked@example.com", "LOCKED");
+		assertRefreshRejectedAfterAccountStatusChange("refresh-unverified@example.com", "UNVERIFIED");
+
+		String deletedEmail = "refresh-deleted@example.com";
+		signupAndVerify(deletedEmail);
+		MvcResult signin = signin(deletedEmail, "Password123!");
+		String refreshToken = refreshTokenFrom(signin);
+		jdbcTemplate.update("delete from users where email = ?", deletedEmail);
+
+		mockMvc().perform(post("/api/v1/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"refreshToken":"%s"}
+								""".formatted(refreshToken)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.message").value("Invalid or expired refresh token"));
+	}
+
+	@Test
+	void refreshRejectsBlankRefreshToken() throws Exception {
+		mockMvc().perform(post("/api/v1/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"refreshToken":" "}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.success").value(false))
+				.andExpect(jsonPath("$.message").value("Invalid request"));
+	}
+
+	private void assertRefreshRejectedAfterAccountStatusChange(String email, String accountStatus) throws Exception {
+		signupAndVerify(email);
+		MvcResult signin = signin(email, "Password123!");
+		String refreshToken = refreshTokenFrom(signin);
+		jdbcTemplate.update(
+				"update users set account_status = ? where email = ?",
+				accountStatus,
+				email);
+
+		mockMvc().perform(post("/api/v1/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"refreshToken":"%s"}
+								""".formatted(refreshToken)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.message").value("Invalid or expired refresh token"));
 	}
 
 	@Test
