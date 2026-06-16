@@ -13,6 +13,10 @@ export type AuthResponse = {
   user: User
 }
 
+export type RefreshPayload = {
+  refreshToken: string
+}
+
 export type LogoutResponse = {
   logoutUris: string[]
 }

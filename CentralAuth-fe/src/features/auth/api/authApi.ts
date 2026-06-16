@@ -6,6 +6,7 @@ import type {
   CentralLoginRequestContext,
   CentralLoginResponse,
   LogoutResponse,
+  RefreshPayload,
   User,
 } from '../types/auth'
 
@@ -50,6 +51,14 @@ export function restoreSession(token: string) {
 
 export function signin(payload: SigninPayload) {
   return apiRequest<AuthResponse>('/api/v1/auth/signin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function refreshSession(payload: RefreshPayload) {
+  return apiRequest<AuthResponse>('/api/v1/auth/refresh', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
