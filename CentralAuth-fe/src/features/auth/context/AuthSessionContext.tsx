@@ -7,6 +7,7 @@ import {
   logoutAllDevices,
   resendVerificationOtp as requestVerificationOtpResend,
   resetPassword as resetPasswordApi,
+  refreshSession,
   restoreSession,
   signin,
   signup,
@@ -24,6 +25,7 @@ import {
 } from './authSessionReducer'
 import { getCurrentLanguage } from '../../../shared/i18n/language'
 import { translate } from '../../../shared/i18n/messages'
+import { restoreStoredSession } from './restoreStoredSession'
 
 export function AuthSessionProvider({ children }: PropsWithChildren) {
   const [state, dispatch] = useReducer(authSessionReducer, undefined, () =>
@@ -48,28 +50,37 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     let cancelled = false
     async function fetchCurrentUser() {
       dispatch({ type: 'restoreStarted' })
-      try {
-        const currentUser = await restoreSession(token)
-        if (!cancelled) {
-          dispatch({ type: 'restoreSucceeded', user: currentUser })
-        }
-      } catch {
-        if (!cancelled) {
-          localStorage.removeItem(tokenStorageKey)
-          localStorage.removeItem(refreshTokenStorageKey)
-          dispatch({
-            type: 'restoreFailed',
-            error: translate(getCurrentLanguage(), 'auth.sessionExpired'),
-          })
-        }
+      const result = await restoreStoredSession(token, refreshToken, {
+        restoreSession,
+        refreshSession,
+        sessionExpiredMessage: translate(getCurrentLanguage(), 'auth.sessionExpired'),
+      })
+      if (cancelled) {
+        return
       }
+
+      if (result.status === 'restored') {
+        dispatch({ type: 'restoreSucceeded', user: result.user })
+        return
+      }
+
+      if (result.status === 'refreshed') {
+        localStorage.setItem(tokenStorageKey, result.response.token)
+        localStorage.setItem(refreshTokenStorageKey, result.response.refreshToken)
+        dispatch({ type: 'sessionStored', response: result.response })
+        return
+      }
+
+      localStorage.removeItem(tokenStorageKey)
+      localStorage.removeItem(refreshTokenStorageKey)
+      dispatch({ type: 'restoreFailed', error: result.error })
     }
 
     fetchCurrentUser()
     return () => {
       cancelled = true
     }
-  }, [token, user])
+  }, [refreshToken, token, user])
 
   const tokenPreview = useMemo(() => {
     if (!token) return ''
@@ -185,10 +196,10 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     dispatch({ type: 'sessionStored', response })
   }
 
-  function clearSession() {
+  function clearSession(error?: string) {
     localStorage.removeItem(tokenStorageKey)
     localStorage.removeItem(refreshTokenStorageKey)
-    dispatch({ type: 'sessionCleared' })
+    dispatch({ type: 'sessionCleared', error })
   }
 
   const value = {

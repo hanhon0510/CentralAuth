@@ -11,6 +11,12 @@ const user = {
   emailVerified: true,
 }
 
+const authResponse = {
+  token: 'new-access-token',
+  refreshToken: 'new-refresh-token',
+  user,
+}
+
 describe('authSessionReducer', () => {
   it('starts restoring when an access token exists', () => {
     const state = createAuthSessionState('access-token', 'refresh-token')
@@ -53,6 +59,28 @@ describe('authSessionReducer', () => {
       restoring: false,
       operation: null,
       sessionError: 'Session expired. Sign in again.',
+    })
+  })
+
+  it('replaces old access and refresh tokens when a session is stored', () => {
+    const state = authSessionReducer(
+      {
+        ...createAuthSessionState('old-access-token', 'old-refresh-token'),
+        sessionError: 'Previous error',
+      },
+      {
+        type: 'sessionStored',
+        response: authResponse,
+      },
+    )
+
+    expect(state).toEqual({
+      token: 'new-access-token',
+      refreshToken: 'new-refresh-token',
+      user,
+      restoring: false,
+      operation: null,
+      sessionError: '',
     })
   })
 
