@@ -3,6 +3,8 @@ type JwtPayload = {
   roles?: unknown
 }
 
+const REFRESH_SKEW_SECONDS = 60
+
 export function rolesFromJwt(token: string) {
   const payload = decodeJwtPayload(token)
   if (!payload || !Array.isArray(payload.roles)) {
@@ -19,6 +21,16 @@ export function expiresAtEpochSecondsFromJwt(token: string) {
   }
 
   return payload.exp
+}
+
+export function refreshDelayMillisecondsFromJwt(token: string, nowEpochSeconds = Date.now() / 1000) {
+  const expiresAtEpochSeconds = expiresAtEpochSecondsFromJwt(token)
+  if (expiresAtEpochSeconds === null) {
+    return null
+  }
+
+  const delaySeconds = expiresAtEpochSeconds - nowEpochSeconds - REFRESH_SKEW_SECONDS
+  return Math.max(0, Math.floor(delaySeconds * 1000))
 }
 
 function decodeJwtPayload(token: string): JwtPayload | null {

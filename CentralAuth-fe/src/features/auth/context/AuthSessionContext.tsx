@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer } from 'react'
+import { useCallback, useEffect, useMemo, useReducer } from 'react'
 import type { PropsWithChildren } from 'react'
 import {
   centralLogin,
@@ -16,7 +16,7 @@ import {
 import { refreshTokenStorageKey, tokenStorageKey } from '../../../shared/constants/storage'
 import type { AuthResponse, CentralLoginRequestContext } from '../types/auth'
 import { AuthSessionStore } from './auth-session-store'
-import { rolesFromJwt } from '../../../shared/lib/jwt'
+import { refreshDelayMillisecondsFromJwt, rolesFromJwt } from '../../../shared/lib/jwt'
 import { propagateFrontChannelLogout } from '../lib/frontChannelLogout'
 import {
   authSessionReducer,
@@ -44,6 +44,18 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   } = state
   const loading = Boolean(operation)
 
+  const storeSession = useCallback((response: AuthResponse) => {
+    localStorage.setItem(tokenStorageKey, response.token)
+    localStorage.setItem(refreshTokenStorageKey, response.refreshToken)
+    dispatch({ type: 'sessionStored', response })
+  }, [])
+
+  const clearSession = useCallback((error?: string) => {
+    localStorage.removeItem(tokenStorageKey)
+    localStorage.removeItem(refreshTokenStorageKey)
+    dispatch({ type: 'sessionCleared', error })
+  }, [])
+
   useEffect(() => {
     if (!token || user) return
 
@@ -65,9 +77,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       }
 
       if (result.status === 'refreshed') {
-        localStorage.setItem(tokenStorageKey, result.response.token)
-        localStorage.setItem(refreshTokenStorageKey, result.response.refreshToken)
-        dispatch({ type: 'sessionStored', response: result.response })
+        storeSession(result.response)
         return
       }
 
@@ -80,7 +90,38 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     return () => {
       cancelled = true
     }
-  }, [refreshToken, token, user])
+  }, [refreshToken, storeSession, token, user])
+
+  useEffect(() => {
+    if (!token || !refreshToken.trim()) return
+    if (operation === 'signOut' || operation === 'signOutAllDevices') return
+
+    const refreshDelayMilliseconds = refreshDelayMillisecondsFromJwt(token)
+    if (refreshDelayMilliseconds === null) return
+
+    let cancelled = false
+    const timeoutId = window.setTimeout(() => {
+      void refreshCurrentSession()
+    }, refreshDelayMilliseconds)
+
+    async function refreshCurrentSession() {
+      try {
+        const response = await refreshSession({ refreshToken })
+        if (!cancelled) {
+          storeSession(response)
+        }
+      } catch {
+        if (!cancelled) {
+          clearSession(translate(getCurrentLanguage(), 'auth.sessionExpired'))
+        }
+      }
+    }
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [clearSession, operation, refreshToken, storeSession, token])
 
   const tokenPreview = useMemo(() => {
     if (!token) return ''
@@ -188,18 +229,6 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     } finally {
       dispatch({ type: 'operationFinished' })
     }
-  }
-
-  function storeSession(response: AuthResponse) {
-    localStorage.setItem(tokenStorageKey, response.token)
-    localStorage.setItem(refreshTokenStorageKey, response.refreshToken)
-    dispatch({ type: 'sessionStored', response })
-  }
-
-  function clearSession(error?: string) {
-    localStorage.removeItem(tokenStorageKey)
-    localStorage.removeItem(refreshTokenStorageKey)
-    dispatch({ type: 'sessionCleared', error })
   }
 
   const value = {
