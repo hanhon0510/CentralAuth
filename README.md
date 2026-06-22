@@ -1,6 +1,6 @@
 # CentralAuth
 
-CentralAuth is a full-stack centralized authentication and identity platform. It provides email/password authentication, email verification, password reset, JWT access tokens, refresh-token tracking, registered client applications, a central-login authorization-code flow, front-channel logout propagation, admin user/client management, structured auth logs, and optional Kafka-backed audit logs.
+CentralAuth is a full-stack centralized authentication and identity platform. It provides email/password authentication, email verification, password reset, JWT access tokens, refresh-token rotation, registered client applications, a central-login authorization-code flow, front-channel logout propagation, admin user/client management, structured auth logs, and optional Kafka-backed audit logs.
 
 ## Contents
 
@@ -62,7 +62,7 @@ Spring Boot backend
 - Auth routes: `/signin`, `/signup`, `/verify-email`, `/forgot-password`, `/reset-password`.
 - Protected routes: `/dashboard`, `/profile`.
 - Demo client routes: `/demo/projects/*`, `/demo/reports/*`.
-- Auth state: `AuthSessionContext` stores access and refresh tokens in `localStorage`, restores the current user through `/api/v1/auth/me`, exposes operation state, and clears invalid sessions.
+- Auth state: `AuthSessionContext` stores access and refresh tokens in `localStorage`, restores or refreshes the current user through `/api/v1/auth/me` and `/api/v1/auth/refresh`, schedules proactive refresh, exposes operation state, and clears invalid sessions.
 - Protected routing: unauthenticated users are redirected to `/signin` with return-location state.
 - Logout propagation: CentralAuth loads registered client logout URIs in hidden iframes so demo clients can clear browser-side session state.
 
@@ -159,6 +159,10 @@ docker exec centralauth-redis redis-cli GET email-verification:user@example.com
 
 JWTs include issuer, subject user ID, email, roles, token use, issued-at, and expiry. Client-scoped JWTs also include the client audience.
 
+### Refresh Tokens
+
+Refresh tokens are one-time use. A successful refresh revokes the presented refresh token and returns a replacement refresh token with a new access token. Reuse of a revoked refresh token for a known user invalidates that user's remaining active refresh tokens.
+
 ### Password Reset
 
 1. `POST /api/v1/auth/forgot-password` accepts an email and silently succeeds.
@@ -193,8 +197,6 @@ Client-scoped JWTs can call `/api/v1/auth/me`; they do not grant admin access.
 - Logout responses include active registered client logout URIs.
 - The frontend loads those logout URIs in hidden iframes to propagate front-channel logout to demo clients.
 
-There is no access-token refresh endpoint yet. Refresh tokens are currently issued and revoked for session tracking and logout behavior.
-
 ## API Reference
 
 All API responses use the common wrapper unless noted:
@@ -218,6 +220,7 @@ Backend errors are centralized through `@RestControllerAdvice` and return the sa
 | `GET`  | `/api/v1/health`                       | none                                                                           | health payload                                                 | Basic health response.                        |
 | `POST` | `/api/v1/auth/signup`                  | `email`, `password`, optional `displayName`                                    | `token`, `refreshToken`, `user`                                | Create an unverified user and issue OTP.      |
 | `POST` | `/api/v1/auth/signin`                  | `email`, `password`                                                            | `token`, `refreshToken`, `user`                                | Sign in an active user.                       |
+| `POST` | `/api/v1/auth/refresh`                 | `refreshToken`                                                                 | `token`, `refreshToken`, `user`                                | Rotate a valid refresh token and issue a new access token. |
 | `POST` | `/api/v1/auth/verify-email`            | `email`, `otp`                                                                 | `null`                                                         | Verify pending user email.                    |
 | `POST` | `/api/v1/auth/resend-verification-otp` | `email`                                                                        | `resendCooldownSeconds`                                        | Resend verification OTP.                      |
 | `POST` | `/api/v1/auth/forgot-password`         | `email`                                                                        | `null`                                                         | Request password reset.                       |
@@ -377,7 +380,7 @@ The frontend stores:
 - refresh token under `centralauth.refreshToken`
 - demo client tokens and callback state under client-specific `centralauth.demo.*` keys
 
-On app load, `AuthSessionContext` restores the current user with `/api/v1/auth/me`. If restore fails, it clears stored auth state and exposes a localized session-expired message.
+On app load, `AuthSessionContext` restores the current user with `/api/v1/auth/me`. If the access token is stale, it refreshes the session through `/api/v1/auth/refresh`, stores the returned token pair, and retries restore. It also schedules proactive refresh before JWT expiry. If restore or refresh fails, it clears stored auth state and exposes a localized session-expired message.
 
 ### Routes
 
@@ -440,6 +443,34 @@ npm run test
 
 Frontend tests cover auth session state and demo client helpers.
 
+### Manual Refresh Session Check
+
+Start infrastructure and the backend:
+
+```sh
+docker compose up -d postgres redis
+cd CentralAuth-be
+.\mvnw.cmd spring-boot:run
+```
+
+For a faster proactive-refresh check, start or restart the backend with `CENTRALAUTH_JWT_EXPIRES_IN_SECONDS=120`.
+
+In another terminal, start the frontend:
+
+```sh
+cd CentralAuth-fe
+npm run dev
+```
+
+Manual checks:
+
+1. Sign in with an active verified user.
+2. Confirm `localStorage` contains `centralauth.token` and `centralauth.refreshToken`.
+3. Confirm the backend is running with `CENTRALAUTH_JWT_EXPIRES_IN_SECONDS=120`.
+4. Wait for proactive refresh.
+5. Confirm both stored token values changed without redirecting to `/signin`.
+6. Use logout and confirm the rotated refresh token no longer refreshes.
+
 ### Browser E2E
 
 The Playwright demo flow expects:
@@ -462,6 +493,6 @@ Override the frontend URL with `E2E_BASE_URL` when needed.
 ## Current Limitations
 
 - Email verification and password reset tokens are generated and stored, but there is no email delivery integration yet.
-- The API issues and revokes refresh tokens, but does not expose an access-token refresh endpoint yet.
+- Refresh tokens are implemented for browser session continuity, but they are still stored in `localStorage`. Moving CentralAuth refresh tokens to secure HttpOnly cookies remains future hardening work.
 - Logout propagation is front-channel iframe based. There is no back-channel logout or token introspection endpoint yet.
 - Kafka-backed audit persistence is disabled by default and must be explicitly enabled.
