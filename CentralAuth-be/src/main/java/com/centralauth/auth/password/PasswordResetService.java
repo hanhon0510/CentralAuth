@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.centralauth.auth.exception.InvalidPasswordResetTokenException;
 import com.centralauth.auth.logging.StructuredAuthLogger;
 import com.centralauth.auth.token.RefreshTokenService;
+import com.centralauth.email.AuthEmailService;
 import com.centralauth.event.auth.PasswordChangedEvent;
 import com.centralauth.event.auth.PasswordResetRequestedEvent;
 import com.centralauth.user.AccountStatus;
@@ -34,6 +35,7 @@ public class PasswordResetService {
 	private final RefreshTokenService refreshTokenService;
 	private final StringRedisTemplate redisTemplate;
 	private final ApplicationEventPublisher eventPublisher;
+	private final AuthEmailService authEmailService;
 	private final SecureRandom secureRandom = new SecureRandom();
 	private final Duration tokenTtl;
 
@@ -43,12 +45,14 @@ public class PasswordResetService {
 			RefreshTokenService refreshTokenService,
 			StringRedisTemplate redisTemplate,
 			ApplicationEventPublisher eventPublisher,
+			AuthEmailService authEmailService,
 			@Value("${centralauth.password-reset.token-ttl:15m}") Duration tokenTtl) {
 		this.userMapper = userMapper;
 		this.passwordEncoder = passwordEncoder;
 		this.refreshTokenService = refreshTokenService;
 		this.redisTemplate = redisTemplate;
 		this.eventPublisher = eventPublisher;
+		this.authEmailService = authEmailService;
 		this.tokenTtl = tokenTtl;
 	}
 
@@ -80,6 +84,7 @@ public class PasswordResetService {
 	private void issueResetToken(User user) {
 		String token = createOpaqueToken();
 		redisTemplate.opsForValue().set(redisKey(token), user.id(), tokenTtl);
+		authEmailService.sendPasswordResetLink(user.email(), token);
 		eventPublisher.publishEvent(new PasswordResetRequestedEvent(user.id(), user.email(), Instant.now()));
 		StructuredAuthLogger.passwordResetRequested(user.id(), user.email());
 	}

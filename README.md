@@ -44,6 +44,7 @@ React frontend
 Spring Boot backend
   |-- PostgreSQL: users, roles, clients, refresh token hashes, audit logs
   |-- Redis: OTPs, reset tokens, login throttles, login state, auth codes, token revocation
+  |-- Email: log-backed local delivery or SMTP delivery
   `-- Kafka: optional auth/admin event transport for audit persistence
 ```
 
@@ -53,6 +54,7 @@ Spring Boot backend
 - `security`: stateless Spring Security, JWT validation, token-use checks, token revocation.
 - `client`: registered client validation, redirect/logout URI validation, demo client bootstrap.
 - `admin`: user status management, client application management, admin bootstrap.
+- `email`: verification OTP and password reset message composition plus log or SMTP delivery.
 - `event`: Spring application events and optional Kafka publisher.
 - `audit`: optional Kafka consumer and audit-log query API.
 - `common`: response wrapper, global exception handling, localization, client IP resolution.
@@ -127,6 +129,38 @@ npm run dev
 
 Vite proxies `/api` to `http://localhost:8080`.
 
+## Configuration
+
+### Email Delivery
+
+CentralAuth sends verification OTP and password reset emails through an `EmailSender` abstraction.
+
+Local development defaults to log delivery:
+
+```properties
+CENTRALAUTH_EMAIL_MODE=log
+CENTRALAUTH_EMAIL_FROM=noreply@centralauth.local
+CENTRALAUTH_FRONTEND_BASE_URL=http://localhost:5173
+```
+
+In log mode, the backend writes the generated email recipient, subject, and body to application logs. This is useful for local signup and password-reset testing without an SMTP server.
+
+Use SMTP mode when a mail server or provider is available:
+
+```properties
+CENTRALAUTH_EMAIL_MODE=smtp
+CENTRALAUTH_EMAIL_FROM=no-reply@example.com
+CENTRALAUTH_FRONTEND_BASE_URL=https://auth.example.com
+SPRING_MAIL_HOST=smtp.example.com
+SPRING_MAIL_PORT=587
+SPRING_MAIL_USERNAME=smtp-user
+SPRING_MAIL_PASSWORD=smtp-password
+SPRING_MAIL_SMTP_AUTH=true
+SPRING_MAIL_SMTP_STARTTLS_ENABLE=true
+```
+
+`CENTRALAUTH_FRONTEND_BASE_URL` is used to build password reset links that point to `/reset-password?token=...`.
+
 ## Authentication Flows
 
 ### Signup And Email Verification
@@ -134,17 +168,13 @@ Vite proxies `/api` to `http://localhost:8080`.
 1. `POST /api/v1/auth/signup` creates a user with normalized lowercase email.
 2. Passwords are hashed with `BCryptPasswordEncoder`.
 3. The user receives `ROLE_USER` and starts with `accountStatus=UNVERIFIED`.
-4. A six-digit OTP is stored in Redis under `email-verification:<email>`.
+4. A six-digit OTP is stored in Redis under `email-verification:<email>` and sent by email.
 5. `POST /api/v1/auth/verify-email` validates the OTP, consumes it, and activates the account.
-6. `POST /api/v1/auth/resend-verification-otp` issues a new OTP when the Redis cooldown allows it.
+6. `POST /api/v1/auth/resend-verification-otp` issues and emails a new OTP when the Redis cooldown allows it.
 
 Signup returns tokens immediately, but protected backend routes still reject the user until email verification activates the account.
 
-For local development, there is no email delivery adapter yet. Inspect Redis when you need a generated OTP:
-
-```sh
-docker exec centralauth-redis redis-cli GET email-verification:user@example.com
-```
+For local development, keep `CENTRALAUTH_EMAIL_MODE=log` and read the generated OTP from backend logs.
 
 ### Signin And Login Protection
 
@@ -166,14 +196,10 @@ Refresh tokens are one-time use. A successful refresh revokes the presented refr
 ### Password Reset
 
 1. `POST /api/v1/auth/forgot-password` accepts an email and silently succeeds.
-2. If the account exists and is active, a random reset token is stored in Redis as `password-reset:<token>`.
+2. If the account exists and is active, a random reset token is stored in Redis as `password-reset:<token>` and emailed as a reset link.
 3. `POST /api/v1/auth/reset-password` consumes the token, updates the BCrypt password hash, and revokes all active refresh tokens.
 
-For local development, inspect Redis when you need a generated reset token:
-
-```sh
-docker exec centralauth-redis redis-cli --scan --pattern "password-reset:*"
-```
+For local development, keep `CENTRALAUTH_EMAIL_MODE=log` and open the generated reset link from backend logs.
 
 ### Central Login For Client Apps
 
@@ -431,7 +457,7 @@ cd CentralAuth-be
 ./mvnw test
 ```
 
-Backend tests cover auth flows, JWT validation, JWT filter behavior, refresh-token persistence, admin users, admin clients, audit logs, Kafka toggles, structured auth logging, Flyway migrations, and demo client bootstrapping.
+Backend tests cover auth flows, email delivery composition and wiring, JWT validation, JWT filter behavior, refresh-token persistence, admin users, admin clients, audit logs, Kafka toggles, structured auth logging, Flyway migrations, and demo client bootstrapping.
 
 ### Frontend
 
@@ -492,7 +518,6 @@ Override the frontend URL with `E2E_BASE_URL` when needed.
 
 ## Current Limitations
 
-- Email verification and password reset tokens are generated and stored, but there is no email delivery integration yet.
 - Refresh tokens are implemented for browser session continuity, but they are still stored in `localStorage`. Moving CentralAuth refresh tokens to secure HttpOnly cookies remains future hardening work.
 - Logout propagation is front-channel iframe based. There is no back-channel logout or token introspection endpoint yet.
 - Kafka-backed audit persistence is disabled by default and must be explicitly enabled.

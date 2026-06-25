@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import com.centralauth.auth.exception.EmailVerificationOtpResendThrottledException;
 import com.centralauth.auth.exception.InvalidEmailVerificationOtpException;
+import com.centralauth.email.AuthEmailService;
 
 @Service
 public class EmailVerificationService {
@@ -19,15 +20,18 @@ public class EmailVerificationService {
 	private static final int OTP_BOUND = 1_000_000;
 
 	private final StringRedisTemplate redisTemplate;
+	private final AuthEmailService authEmailService;
 	private final SecureRandom secureRandom;
 	private final Duration otpTtl;
 	private final Duration resendCooldown;
 
 	public EmailVerificationService(
 			StringRedisTemplate redisTemplate,
+			AuthEmailService authEmailService,
 			@Value("${centralauth.email-verification.otp-ttl:10m}") Duration otpTtl,
 			@Value("${centralauth.email-verification.resend-cooldown:60s}") Duration resendCooldown) {
 		this.redisTemplate = redisTemplate;
+		this.authEmailService = authEmailService;
 		this.secureRandom = new SecureRandom();
 		this.otpTtl = otpTtl;
 		this.resendCooldown = resendCooldown;
@@ -36,6 +40,7 @@ public class EmailVerificationService {
 	public void issueOtp(String email) {
 		String otp = generateOtp();
 		redisTemplate.opsForValue().set(redisKey(email), otp, otpTtl);
+		authEmailService.sendVerificationOtp(email, otp);
 	}
 
 	public int resendOtp(String email) {

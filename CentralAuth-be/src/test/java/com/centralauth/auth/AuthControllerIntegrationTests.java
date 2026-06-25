@@ -51,6 +51,7 @@ import org.springframework.web.context.WebApplicationContext;
 
 import com.centralauth.security.JwtPrincipal;
 import com.centralauth.security.JwtService;
+import com.centralauth.email.AuthEmailService;
 
 @SpringBootTest
 class AuthControllerIntegrationTests {
@@ -84,6 +85,9 @@ class AuthControllerIntegrationTests {
 
 	@MockitoBean
 	KafkaTemplate<String, Object> kafkaTemplate;
+
+	@MockitoBean
+	AuthEmailService authEmailService;
 
 	ValueOperations<String, String> valueOperations;
 
@@ -144,6 +148,12 @@ class AuthControllerIntegrationTests {
 				eq("email-verification:" + email),
 				otpCaptor.capture(),
 				eq(Duration.ofMinutes(10)));
+		return otpCaptor.getAllValues();
+	}
+
+	private List<String> captureSentVerificationOtps(String email, int count) {
+		ArgumentCaptor<String> otpCaptor = ArgumentCaptor.forClass(String.class);
+		verify(authEmailService, times(count)).sendVerificationOtp(eq(email), otpCaptor.capture());
 		return otpCaptor.getAllValues();
 	}
 
@@ -758,6 +768,7 @@ class AuthControllerIntegrationTests {
 				eq("email-verification:new.user@example.com"),
 				matches("\\d{6}"),
 				eq(Duration.ofMinutes(10)));
+		verify(authEmailService).sendVerificationOtp(eq("new.user@example.com"), matches("\\d{6}"));
 
 		mockMvc().perform(post("/api/v1/auth/signin")
 						.contentType(MediaType.APPLICATION_JSON)
@@ -906,6 +917,7 @@ class AuthControllerIntegrationTests {
 
 		List<String> issuedOtps = captureIssuedOtps("resend@example.com", 2);
 		assertThat(issuedOtps).allMatch(otp -> otp.matches("\\d{6}"));
+		assertThat(captureSentVerificationOtps("resend@example.com", 2)).isEqualTo(issuedOtps);
 	}
 
 	@Test
@@ -980,7 +992,10 @@ class AuthControllerIntegrationTests {
 				.andExpect(jsonPath("$.message")
 						.value("If the email is registered, password reset instructions have been sent"));
 
-		capturePasswordResetToken("forgot-existing@example.com");
+		String token = capturePasswordResetToken("forgot-existing@example.com");
+		verify(authEmailService).sendPasswordResetLink(
+				eq("forgot-existing@example.com"),
+				eq(token));
 	}
 
 	@Test
@@ -1020,6 +1035,7 @@ class AuthControllerIntegrationTests {
 				matches("password-reset:.*"),
 				anyString(),
 				eq(Duration.ofMinutes(15)));
+		verify(authEmailService, never()).sendPasswordResetLink(anyString(), anyString());
 	}
 
 	@Test

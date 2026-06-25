@@ -41,6 +41,18 @@ spring:
       properties:
         spring.json.trusted.packages: com.centralauth.event.auth
 
+  mail:
+    host: ${SPRING_MAIL_HOST:localhost}
+    port: ${SPRING_MAIL_PORT:1025}
+    username: ${SPRING_MAIL_USERNAME:}
+    password: ${SPRING_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SPRING_MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${SPRING_MAIL_SMTP_STARTTLS_ENABLE:false}
+
 mybatis:
   mapper-locations: classpath*:mappers/**/*.xml
   type-aliases-package: com.centralauth
@@ -61,6 +73,11 @@ server:
   port: ${PORT:8080}
 
 centralauth:
+  email:
+    mode: ${CENTRALAUTH_EMAIL_MODE:log}
+    app-name: ${CENTRALAUTH_EMAIL_APP_NAME:CentralAuth}
+    from: ${CENTRALAUTH_EMAIL_FROM:noreply@centralauth.local}
+    frontend-base-url: ${CENTRALAUTH_FRONTEND_BASE_URL:http://localhost:5173}
   admin:
     bootstrap-emails: ${CENTRALAUTH_ADMIN_BOOTSTRAP_EMAILS:}
   demo-clients:
